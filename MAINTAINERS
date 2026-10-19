@@ -1175,6 +1175,17 @@ F: hw/gpio/zaurus.c
 F: docs/system/arm/collie.rst
 F: tests/functional/arm/test_collie.py
 
+SiFli SF32LB52 boards
+M: Chao Liu <chao.liu@processmission.com>
+L: qemu-arm@nongnu.org
+S: Maintained
+F: docs/system/arm/sf32lb52.rst
+F: hw/arm/sf32lb52*
+F: hw/char/sf32lb_usart.c
+F: include/hw/arm/sf32lb52x.h
+F: include/hw/char/sf32lb_usart.h
+F: tests/qtest/sf32lb52x-test.c
+
 Stellaris
 M: Peter Maydell <peter.maydell@linaro.org>
 L: qemu-arm@nongnu.org

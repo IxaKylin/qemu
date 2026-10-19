@@ -306,6 +306,10 @@ config S32K5
     select NXP_S32_MC_ME
     select UNIMP
 
+config SF32LB52X
+    bool
+    select ARM_V7M
+
 config SABRELITE
     bool
     default y

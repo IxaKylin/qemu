@@ -30,6 +30,7 @@ arm_common_ss.add(when: 'CONFIG_STM32VLDISCOVERY', if_true: files('stm32vldiscov
 arm_common_ss.add(when: 'CONFIG_ZYNQ', if_true: files('xilinx_zynq.c'))
 arm_common_ss.add(when: 'CONFIG_SABRELITE', if_true: files('sabrelite.c'))
 arm_common_ss.add(when: 'CONFIG_S32K5', if_true: files('s32k5.c'))
+arm_common_ss.add(when: 'CONFIG_SF32LB52X', if_true: files('sf32lb52x.c'))
 
 arm_common_ss.add(when: 'CONFIG_ARM_V7M', if_true: files('armv7m.c'))
 arm_common_ss.add(when: 'CONFIG_EXYNOS4', if_true: files('exynos4210.c'))
