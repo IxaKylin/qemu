@@ -312,6 +312,12 @@ config SF32LB52X
     select SF32LB_USART
     select UNIMP
 
+config SF32LB52_DEVKIT_LCD
+    bool
+    default y
+    depends on TCG && ARM
+    select SF32LB52X
+
 config SABRELITE
     bool
     default y
