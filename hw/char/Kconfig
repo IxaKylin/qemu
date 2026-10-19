@@ -55,6 +55,9 @@ config NXP_LPUART
     bool
     select REGISTER
 
+config SF32LB_USART
+    bool
+
 config STC32G_UART
     bool
     select REGISTER

@@ -306,6 +306,18 @@ config S32K5
     select NXP_S32_MC_ME
     select UNIMP
 
+config SF32LB52X
+    bool
+    select ARM_V7M
+    select SF32LB_USART
+    select UNIMP
+
+config SF32LB52_DEVKIT_LCD
+    bool
+    default y
+    depends on TCG && ARM
+    select SF32LB52X
+
 config SABRELITE
     bool
     default y

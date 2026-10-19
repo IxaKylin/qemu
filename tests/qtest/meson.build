@@ -268,6 +268,7 @@ qtests_arm = \
   (config_all_devices.has_key('CONFIG_ARDEP_V2') ? \
    ['ardep-v2-test'] : []) + \
   (config_all_devices.has_key('CONFIG_S32K5') ? ['s32k5-test'] : []) + \
+  (config_all_devices.has_key('CONFIG_SF32LB52X') ? ['sf32lb52x-test'] : []) + \
   (config_all_devices.has_key('CONFIG_FSI_APB2OPB_ASPEED') ? ['aspeed_fsi-test'] : []) + \
   (config_all_devices.has_key('CONFIG_CAN_FLEXCAN') ? ['flexcan-test'] : []) + \
   (config_all_devices.has_key('CONFIG_VERSATILE') ? ['arm-boot-test'] : []) + \

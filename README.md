@@ -1,4 +1,4 @@
-# Process Mission QEMU
+<h1 align="center">Process Mission QEMU</h1>
 
 <p align="center">
   <strong>Board and SoC model development on top of QEMU</strong><br>
@@ -48,6 +48,7 @@ The table below is the current map of machine models covered by this tree.
 | ARM | [`rk3588s-roc-pc`](docs/system/arm/rk3588.rst) | ✅ | ✅ | PM |
 | ARM | [`rock-5b-plus`](docs/system/arm/rk3588.rst) | ✅ | ✅ | PM |
 | ARM | [`s32k566-cvb-r52`](docs/system/arm/s32k5.rst) | ✅ | — | PM |
+| ARM | [`sf32lb52-devkit-lcd`](docs/system/arm/sf32lb52.rst) | ✅ | — | PM |
 | ARM | [`stm32g474`](docs/system/arm/stm32g474.rst) | ✅ | — | PM |
 | MCS-51 | [`stc8g1k08a`](docs/system/target-mcs51.rst) | ✅ | ✅ | PM |
 | MCS-251 | [`stc32g144k246`](docs/system/target-mcs51.rst) | ✅ | ✅ | PM |
