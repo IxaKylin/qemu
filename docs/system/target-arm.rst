@@ -93,6 +93,7 @@ Board-specific documentation
    arm/nrf
    arm/nuvoton
    arm/s32k5
+   arm/sf32lb52
    arm/imx25-pdk
    arm/mcimx6ul-evk
    arm/mcimx7d-sabre

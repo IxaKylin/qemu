@@ -1,0 +1,48 @@
+.. SPDX-License-Identifier: GPL-2.0-or-later
+
+SiFli SF32LB52-DevKit-LCD board (``sf32lb52-devkit-lcd``)
+=========================================================
+The ``sf32lb52-devkit-lcd`` machine models the SiFli SF32LB52-DevKit-LCD
+development board, which is built around the SiFli SF32LB52X SoC and its
+SF32LB525UC6 module.
+
+The model is intended for RTOS boot smoke tests, including Zephyr images
+built for the ``sf32lb52_devkit_lcd/sf32lb525uc6`` board target.
+
+For more information, see <https://wiki.sifli.com/en/board/sf32lb52x/SF32LB52-DevKit-LCD.html>
+
+Supported devices
+-----------------
+The ``sf32lb52-devkit-lcd`` machine supports the following devices:
+
+* 1 Arm Cortex-M33 core
+* 3 USART serial ports
+* the RCC and reset controller
+* the HPSYS_CFG, pinmux and GPIO blocks
+* the AON and PMUC power management blocks
+
+The other SF32LB52X peripherals are not modeled yet and are provided as
+unimplemented devices.
+
+Boot options
+------------
+The ``sf32lb52-devkit-lcd`` machine boots an image directly given with
+``-kernel``. Both a Zephyr ELF image and a raw ``zephyr.bin`` image are
+accepted. The SiFli boot ROM, its flash configuration table and the
+``sftool`` flashing flow are not modeled, and there is no ``-bios``
+firmware boot path.
+
+Running
+-------
+The first serial port is connected to the Zephyr console, so the console
+output is available with ``-nographic``:
+
+.. code-block:: bash
+
+   $ qemu-system-arm -M sf32lb52-devkit-lcd -kernel zephyr.elf -nographic
+
+Limitations
+-----------
+Only the devices listed above are modeled; accesses to the other
+peripheral windows are logged and ignored. Migration and VM snapshots are
+not supported.
