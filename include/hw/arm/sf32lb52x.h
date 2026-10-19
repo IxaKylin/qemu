@@ -33,12 +33,36 @@ OBJECT_DECLARE_SIMPLE_TYPE(SF32LB52XSoCState, SF32LB52X_SOC)
 #define SF32LB52X_SRAM1_BASE    0x20400000
 #define SF32LB52X_SRAM1_SIZE    (64 * 1024)
 
+/* System controller blocks on the HPSYS AHB. */
+#define SF32LB52X_RCC_BASE      0x50000000
+#define SF32LB52X_PINMUX_BASE   0x50003000
+#define SF32LB52X_CFG_BASE      0x5000b000
+#define SF32LB52X_GPIO_BASE     0x500a0000
+#define SF32LB52X_AON_BASE      0x500c0000
+#define SF32LB52X_PMUC_BASE     0x500ca000
+
+#define SF32LB52X_SYSCON_SIZE   0x1000
+#define SF32LB52X_SYSCON_WORDS  (SF32LB52X_SYSCON_SIZE / 4)
+
+/* Register banks that only store what the guest writes. */
+typedef struct SF32LB52XRegBank {
+    MemoryRegion mmio;
+    uint32_t regs[SF32LB52X_SYSCON_WORDS];
+} SF32LB52XRegBank;
+
 struct SF32LB52XSoCState {
     /*< private >*/
     SysBusDevice parent_obj;
 
     /*< public >*/
     ARMv7MState armv7m;
+    SF32LB52XRegBank rcc;
+    SF32LB52XRegBank aon;
+    SF32LB52XRegBank pmuc;
+    SF32LB52XRegBank cfg;
+    SF32LB52XRegBank pinmux;
+    SF32LB52XRegBank gpio;
+
     MemoryRegion flash;
     MemoryRegion sram;
     MemoryRegion sram1;

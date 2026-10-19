@@ -20,6 +20,18 @@
 #include "qemu/log.h"
 #include "qemu/module.h"
 
+#define SF32LB52X_RCC_CSR        0x20
+#define SF32LB52X_RCC_DLL1CR     0x2c
+#define SF32LB52X_RCC_DLL2CR     0x30
+#define SF32LB52X_RCC_DLL_EN     (1U << 0)
+#define SF32LB52X_RCC_DLL_READY  (1U << 31)
+
+#define SF32LB52X_AON_ACR        0x10
+#define SF32LB52X_AON_HRC48_REQ  (1U << 0)
+#define SF32LB52X_AON_HXT48_REQ  (1U << 1)
+#define SF32LB52X_AON_HRC48_RDY  (1U << 30)
+#define SF32LB52X_AON_HXT48_RDY  (1U << 31)
+
 #define SF32LB52X_NUM_PRIO_BITS  3
 
 /*
@@ -56,6 +68,115 @@ static const struct {
     { "sf32lb52x.rtc",     0x500cb000, 0x1000 },
 };
 
+static uint64_t sf32lb52x_syscon_read(void *opaque, hwaddr addr,
+                                      unsigned int size)
+{
+    SF32LB52XRegBank *bank = opaque;
+
+    return bank->regs[addr / 4];
+}
+
+static void sf32lb52x_syscon_write(void *opaque, hwaddr addr,
+                                   uint64_t value, unsigned int size)
+{
+    SF32LB52XRegBank *bank = opaque;
+
+    bank->regs[addr / 4] = value;
+}
+
+/*
+ * The RCC DLLs report READY as soon as the firmware enables them. The
+ * guest polls this bit in a loop without a timeout, so the value must
+ * not depend on a timer.
+ */
+static uint64_t sf32lb52x_rcc_read(void *opaque, hwaddr addr,
+                                   unsigned int size)
+{
+    SF32LB52XRegBank *bank = opaque;
+    uint32_t value = bank->regs[addr / 4];
+
+    if ((addr == SF32LB52X_RCC_DLL1CR || addr == SF32LB52X_RCC_DLL2CR) &&
+        (value & SF32LB52X_RCC_DLL_EN)) {
+        value |= SF32LB52X_RCC_DLL_READY;
+    }
+
+    return value;
+}
+
+/*
+ * The AON block reports the HXT48 and HRC48 oscillators as ready once
+ * the firmware requests them; the clock driver polls these bits.
+ */
+static uint64_t sf32lb52x_aon_read(void *opaque, hwaddr addr,
+                                   unsigned int size)
+{
+    SF32LB52XRegBank *bank = opaque;
+    uint32_t value = bank->regs[addr / 4];
+
+    if (addr == SF32LB52X_AON_ACR) {
+        if (value & SF32LB52X_AON_HXT48_REQ) {
+            value |= SF32LB52X_AON_HXT48_RDY;
+        }
+        if (value & SF32LB52X_AON_HRC48_REQ) {
+            value |= SF32LB52X_AON_HRC48_RDY;
+        }
+    }
+
+    return value;
+}
+
+static const MemoryRegionOps sf32lb52x_syscon_ops = {
+    .read = sf32lb52x_syscon_read,
+    .write = sf32lb52x_syscon_write,
+    .endianness = DEVICE_LITTLE_ENDIAN,
+    .impl = {
+        .min_access_size = 4,
+        .max_access_size = 4,
+    },
+    .valid = {
+        .min_access_size = 1,
+        .max_access_size = 4,
+    },
+};
+
+static const MemoryRegionOps sf32lb52x_rcc_ops = {
+    .read = sf32lb52x_rcc_read,
+    .write = sf32lb52x_syscon_write,
+    .endianness = DEVICE_LITTLE_ENDIAN,
+    .impl = {
+        .min_access_size = 4,
+        .max_access_size = 4,
+    },
+    .valid = {
+        .min_access_size = 1,
+        .max_access_size = 4,
+    },
+};
+
+static const MemoryRegionOps sf32lb52x_aon_ops = {
+    .read = sf32lb52x_aon_read,
+    .write = sf32lb52x_syscon_write,
+    .endianness = DEVICE_LITTLE_ENDIAN,
+    .impl = {
+        .min_access_size = 4,
+        .max_access_size = 4,
+    },
+    .valid = {
+        .min_access_size = 1,
+        .max_access_size = 4,
+    },
+};
+
+static void sf32lb52x_regbank_init(SF32LB52XRegBank *bank, Object *owner,
+                                   const char *name,
+                                   const MemoryRegionOps *ops,
+                                   MemoryRegion *memory, hwaddr base)
+{
+    memory_region_init_io(&bank->mmio, owner, ops, bank, name,
+                          SF32LB52X_SYSCON_SIZE);
+    memory_region_add_subregion(memory, base, &bank->mmio);
+}
+
 static void sf32lb52x_create_unimplemented_devices(MemoryRegion *memory)
 {
     size_t i;
@@ -82,6 +203,18 @@ static void sf32lb52x_soc_instance_init(Object *obj)
     object_initialize_child(obj, "armv7m", &s->armv7m, TYPE_ARMV7M);
 
     s->sysclk = qdev_init_clock_in(DEVICE(obj), "sysclk", NULL, NULL, 0);
+}
+
+static void sf32lb52x_soc_reset_hold(Object *obj, ResetType type)
+{
+    SF32LB52XSoCState *s = SF32LB52X_SOC(obj);
+
+    memset(s->rcc.regs, 0, sizeof(s->rcc.regs));
+    memset(s->aon.regs, 0, sizeof(s->aon.regs));
+    memset(s->pmuc.regs, 0, sizeof(s->pmuc.regs));
+    memset(s->cfg.regs, 0, sizeof(s->cfg.regs));
+    memset(s->pinmux.regs, 0, sizeof(s->pinmux.regs));
+    memset(s->gpio.regs, 0, sizeof(s->gpio.regs));
 }
 
 static void sf32lb52x_soc_realize(DeviceState *dev, Error **errp)
@@ -119,6 +252,11 @@ static void sf32lb52x_soc_realize(DeviceState *dev, Error **errp)
     }
     memory_region_add_subregion(s->memory, SF32LB52X_SRAM1_BASE, &s->sram1);
 
+    sf32lb52x_regbank_init(&s->rcc, OBJECT(dev), "sf32lb52x.rcc",
+                           &sf32lb52x_rcc_ops, s->memory, SF32LB52X_RCC_BASE);
+    sf32lb52x_regbank_init(&s->aon, OBJECT(dev), "sf32lb52x.aon",
+                           &sf32lb52x_aon_ops, s->memory, SF32LB52X_AON_BASE);
+
     armv7m = DEVICE(&s->armv7m);
     qdev_prop_set_uint32(armv7m, "num-irq", SF32LB52X_NUM_IRQS);
     qdev_prop_set_uint32(armv7m, "num-prio-bits", SF32LB52X_NUM_PRIO_BITS);
@@ -149,6 +287,7 @@ static void sf32lb52x_soc_class_init(ObjectClass *klass, const void *data)
     DeviceClass *dc = DEVICE_CLASS(klass);
     ResettableClass *rc = RESETTABLE_CLASS(klass);
 
+    rc->phases.hold = sf32lb52x_soc_reset_hold;
     dc->realize = sf32lb52x_soc_realize;
     dc->desc = "SiFli SF32LB52X";
     dc->vmsd = &vmstate_sf32lb52x_soc;
