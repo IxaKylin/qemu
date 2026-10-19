@@ -309,6 +309,7 @@ config S32K5
 config SF32LB52X
     bool
     select ARM_V7M
+    select SF32LB_USART
     select UNIMP
 
 config SABRELITE

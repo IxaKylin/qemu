@@ -34,6 +34,16 @@
 
 #define SF32LB52X_NUM_PRIO_BITS  3
 
+static const hwaddr sf32lb52x_usart_base[SF32LB52X_NUM_USARTS] = {
+    SF32LB52X_USART1_BASE,
+    SF32LB52X_USART1_BASE + SF32LB52X_USART_STRIDE,
+    SF32LB52X_USART1_BASE + 2 * SF32LB52X_USART_STRIDE,
+};
+
+static const int sf32lb52x_usart_irq[SF32LB52X_NUM_USARTS] = {
+    59, 74, 95,
+};
+
 /*
  * Peripheral windows that are not modeled. Accesses are logged as
  * unimplemented instead of faulting the guest, so that firmware which
@@ -202,6 +212,15 @@ static void sf32lb52x_soc_instance_init(Object *obj)
 
     object_initialize_child(obj, "armv7m", &s->armv7m, TYPE_ARMV7M);
 
+    for (i = 0; i < SF32LB52X_NUM_USARTS; i++) {
+        g_autofree char *name = g_strdup_printf("usart%d-chardev", i + 1);
+
+        object_initialize_child(obj, "usart[*]", &s->usart[i],
+                                TYPE_SF32LB_USART);
+        object_property_add_alias(obj, name, OBJECT(&s->usart[i]),
+                                  "chardev");
+    }
+
     s->sysclk = qdev_init_clock_in(DEVICE(obj), "sysclk", NULL, NULL, 0);
 }
 
@@ -279,6 +298,18 @@ static void sf32lb52x_soc_realize(DeviceState *dev, Error **errp)
                              OBJECT(s->memory), &error_abort);
     if (!sysbus_realize(SYS_BUS_DEVICE(&s->armv7m), errp)) {
         return;
+    }
+
+    for (i = 0; i < SF32LB52X_NUM_USARTS; i++) {
+        SysBusDevice *usart = SYS_BUS_DEVICE(&s->usart[i]);
+
+        if (!sysbus_realize(usart, errp)) {
+            return;
+        }
+        sysbus_mmio_map(usart, 0, sf32lb52x_usart_base[i]);
+        sysbus_connect_irq(usart, 0,
+                           qdev_get_gpio_in(DEVICE(&s->armv7m),
+                                            sf32lb52x_usart_irq[i]));
     }
 
     sf32lb52x_create_unimplemented_devices(s->memory);

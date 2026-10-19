@@ -10,6 +10,7 @@
 #define HW_ARM_SF32LB52X_H
 
 #include "hw/arm/armv7m.h"
+#include "hw/char/sf32lb_usart.h"
 #include "hw/core/clock.h"
 #include "qom/object.h"
 #include "system/memory.h"
@@ -18,6 +19,7 @@
 OBJECT_DECLARE_SIMPLE_TYPE(SF32LB52XSoCState, SF32LB52X_SOC)
 
 #define SF32LB52X_NUM_IRQS      (100)
+#define SF32LB52X_NUM_USARTS    (3)
 
 /* The HCPU runs from the DLL1 output at 240 MHz. */
 #define SF32LB52X_SYSCLK_HZ     (240 * 1000 * 1000)
@@ -41,6 +43,9 @@ OBJECT_DECLARE_SIMPLE_TYPE(SF32LB52XSoCState, SF32LB52X_SOC)
 #define SF32LB52X_AON_BASE      0x500c0000
 #define SF32LB52X_PMUC_BASE     0x500ca000
 
+#define SF32LB52X_USART1_BASE   0x50084000
+#define SF32LB52X_USART_STRIDE  0x1000
+
 #define SF32LB52X_SYSCON_SIZE   0x1000
 #define SF32LB52X_SYSCON_WORDS  (SF32LB52X_SYSCON_SIZE / 4)
 
@@ -56,6 +61,8 @@ struct SF32LB52XSoCState {
 
     /*< public >*/
     ARMv7MState armv7m;
+    SF32LBUSARTState usart[SF32LB52X_NUM_USARTS];
+
     SF32LB52XRegBank rcc;
     SF32LB52XRegBank aon;
     SF32LB52XRegBank pmuc;
