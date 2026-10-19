@@ -15,11 +15,64 @@
 #include "hw/core/qdev-properties.h"
 #include "hw/core/resettable.h"
 #include "hw/core/sysbus.h"
+#include "hw/misc/unimp.h"
 #include "migration/vmstate.h"
 #include "qemu/log.h"
 #include "qemu/module.h"
 
 #define SF32LB52X_NUM_PRIO_BITS  3
+
+/*
+ * Peripheral windows that are not modeled. Accesses are logged as
+ * unimplemented instead of faulting the guest, so that firmware which
+ * probes an unmodeled block still reaches the console.
+ */
+static const struct {
+    const char *name;
+    hwaddr base;
+    hwaddr size;
+} sf32lb52x_unimplemented[] = {
+    { "sf32lb52x.atim",    0x50004000, 0x1000 },
+    { "sf32lb52x.lcdc",    0x50008000, 0x1000 },
+    { "sf32lb52x.efuse",   0x5000c000, 0x0100 },
+    { "sf32lb52x.crypto",  0x5000d000, 0x1000 },
+    { "sf32lb52x.trng",    0x5000f000, 0x1000 },
+    { "sf32lb52x.mpi1",    0x50041000, 0x1000 },
+    { "sf32lb52x.mpi2",    0x50042000, 0x1000 },
+    { "sf32lb52x.crc",     0x50048000, 0x1000 },
+    { "sf32lb52x.dmac",    0x50081000, 0x1000 },
+    { "sf32lb52x.mailbox", 0x50082000, 0x1000 },
+    { "sf32lb52x.gpadc",   0x50087000, 0x1000 },
+    { "sf32lb52x.audcodec", 0x50088000, 0x0400 },
+    { "sf32lb52x.tsen",    0x50089000, 0x1000 },
+    { "sf32lb52x.wdt",     0x50094000, 0x1000 },
+    { "sf32lb52x.spi1",    0x50095000, 0x1000 },
+    { "sf32lb52x.spi2",    0x50096000, 0x1000 },
+    { "sf32lb52x.i2c1",    0x5009c000, 0x1000 },
+    { "sf32lb52x.i2c2",    0x5009d000, 0x1000 },
+    { "sf32lb52x.i2c3",    0x5009e000, 0x1000 },
+    { "sf32lb52x.i2c4",    0x5009f000, 0x1000 },
+    { "sf32lb52x.gptim2",  0x500b0000, 0x1000 },
+    { "sf32lb52x.rtc",     0x500cb000, 0x1000 },
+};
+
+static void sf32lb52x_create_unimplemented_devices(MemoryRegion *memory)
+{
+    size_t i;
+
+    for (i = 0; i < ARRAY_SIZE(sf32lb52x_unimplemented); i++) {
+        DeviceState *dev = qdev_new(TYPE_UNIMPLEMENTED_DEVICE);
+
+        qdev_prop_set_string(dev, "name", sf32lb52x_unimplemented[i].name);
+        qdev_prop_set_uint64(dev, "size", sf32lb52x_unimplemented[i].size);
+        sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
+        memory_region_add_subregion_overlap(memory,
+                                            sf32lb52x_unimplemented[i].base,
+                                            sysbus_mmio_get_region(
+                                                SYS_BUS_DEVICE(dev), 0),
+                                            -1000);
+    }
+}
 
 static void sf32lb52x_soc_instance_init(Object *obj)
 {
@@ -78,6 +131,7 @@ static void sf32lb52x_soc_realize(DeviceState *dev, Error **errp)
         return;
     }
 
+    sf32lb52x_create_unimplemented_devices(s->memory);
 }
 
 static const Property sf32lb52x_soc_properties[] = {
