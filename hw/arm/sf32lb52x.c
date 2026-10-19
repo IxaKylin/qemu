@@ -254,8 +254,20 @@ static void sf32lb52x_soc_realize(DeviceState *dev, Error **errp)
 
     sf32lb52x_regbank_init(&s->rcc, OBJECT(dev), "sf32lb52x.rcc",
                            &sf32lb52x_rcc_ops, s->memory, SF32LB52X_RCC_BASE);
+    sf32lb52x_regbank_init(&s->pinmux, OBJECT(dev), "sf32lb52x.pinmux",
+                           &sf32lb52x_syscon_ops, s->memory,
+                           SF32LB52X_PINMUX_BASE);
+    sf32lb52x_regbank_init(&s->cfg, OBJECT(dev), "sf32lb52x.cfg",
+                           &sf32lb52x_syscon_ops, s->memory,
+                           SF32LB52X_CFG_BASE);
+    sf32lb52x_regbank_init(&s->gpio, OBJECT(dev), "sf32lb52x.gpio",
+                           &sf32lb52x_syscon_ops, s->memory,
+                           SF32LB52X_GPIO_BASE);
     sf32lb52x_regbank_init(&s->aon, OBJECT(dev), "sf32lb52x.aon",
                            &sf32lb52x_aon_ops, s->memory, SF32LB52X_AON_BASE);
+    sf32lb52x_regbank_init(&s->pmuc, OBJECT(dev), "sf32lb52x.pmuc",
+                           &sf32lb52x_syscon_ops, s->memory,
+                           SF32LB52X_PMUC_BASE);
 
     armv7m = DEVICE(&s->armv7m);
     qdev_prop_set_uint32(armv7m, "num-irq", SF32LB52X_NUM_IRQS);
