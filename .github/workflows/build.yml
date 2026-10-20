@@ -2,9 +2,10 @@ name: Upstream QEMU CI
 
 on:
   push:
-  pull_request:
     branches:
       - devel
+  pull_request:
+  workflow_dispatch:
 
 env:
   # p-b-o/qemu-ci is an upstream-series runner. This downstream tree carries
@@ -50,14 +51,6 @@ jobs:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
-
-          if [ "$REPOSITORY" = "p-b-o/qemu-ci" ]; then
-              git remote add upstream https://gitlab.com/qemu-project/qemu
-              git fetch --no-tags upstream master
-              base="$(git merge-base upstream/master HEAD)"
-              echo "range=$base..HEAD" >> "$GITHUB_OUTPUT"
-              exit 0
-          fi
 
           if [ "$EVENT_NAME" = "pull_request" ]; then
               if [ -z "$BASE_REF" ] || [ -z "$PR_HEAD_SHA" ]; then
