@@ -292,6 +292,11 @@ qtests_aarch64 = \
   (config_all_devices.has_key('CONFIG_NPCM8XX') ? qtests_npcm8xx : []) + \
   (config_all_devices.has_key('CONFIG_PHYTIUM_E2000') ? ['dw_mci-test'] : []) + \
   (config_all_devices.has_key('CONFIG_PHYTIUM_POMELO') ? ['phytium-pomelo-test'] : []) + \
+  (config_all_devices.has_key('CONFIG_ROCK5B') ? ['dwc3-udc-test'] : []) + \
+  (config_all_devices.has_key('CONFIG_ROCK5B') ? ['rock-5b-test'] : []) + \
+  (config_all_devices.has_key('CONFIG_ARM_VIRT') and                            \
+   config_all_devices.has_key('CONFIG_RTL8125_PCI') and slirp.found() ?       \
+   ['rtl8125-test'] : []) +                                                   \
   (config_all_devices.has_key('CONFIG_IOMMU_TESTDEV') and
    config_all_devices.has_key('CONFIG_ARM_VIRT') ?
    ['iommu-smmuv3-test'] : []) + \
