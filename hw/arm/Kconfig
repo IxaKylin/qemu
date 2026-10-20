@@ -273,12 +273,22 @@ config RK3588
     select RK3588_RNG
     select RK3X_I2C
     select HYM8563
+    select CPU_CLUSTER
+    select DWC3_UDC
+    select DW8250
+    select REGISTER
+    select RTL8125_PCI
+    select UNIMP
+
+config RK3588_LEGACY_MACHINE
+    bool
 
 config RK3588_EVB
     bool
     default y
     depends on TCG && AARCH64
     select RK3588
+    select RK3588_LEGACY_MACHINE
     select DWMAC4
 
 config RK3588S_ROC_PC
@@ -286,6 +296,7 @@ config RK3588S_ROC_PC
     default y
     depends on TCG && AARCH64
     select RK3588
+    select RK3588_LEGACY_MACHINE
     select DWMAC4
 
 config ROCK_5B_PLUS
@@ -293,6 +304,7 @@ config ROCK_5B_PLUS
     default y
     depends on TCG && AARCH64
     select RK3588
+    select RK3588_LEGACY_MACHINE
     select RK3588_SECURE_OTP
     select ROCKCHIP_CRYPTO_V2
 
@@ -876,3 +888,10 @@ config ARMSSE
     select UNIMP
     select SSE_COUNTER
     select SSE_TIMER
+
+config ROCK5B
+    bool
+    default y
+    depends on TCG && AARCH64
+    select RK3588
+    select SSI_M25P80
