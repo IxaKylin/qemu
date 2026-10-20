@@ -1111,7 +1111,6 @@ F: include/hw/sd/dw_mmc.h
 F: tests/qtest/dwc3-udc-test.c
 F: tests/qtest/rock-5b-test.c
 F: tests/qtest/rtl8125-test.c
-F: docs/system/arm/rock-5b.rst
 F: scripts/rock5b-usb/
 
 Phytium E2000Q machines

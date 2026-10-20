@@ -103,7 +103,6 @@ Board-specific documentation
    arm/phytium_pomelo
    arm/raspi
    arm/rk3588
-   arm/rock-5b
    arm/collie
    arm/sx1
    arm/stellaris
