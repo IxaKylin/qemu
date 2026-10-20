@@ -1,0 +1,2 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+/* The QEMU control tree declares its pre-relocation devices directly. */
