@@ -7,36 +7,6 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
-/*
- * This device models a DWC3 controller in device mode plus the minimum USB
- * host work needed to enumerate a CDC ACM console, so that a firmware UDC
- * driver reaches its console without a second QEMU USB topology.  It was
- * derived from the downstream hw/usb/rk3588_dwc3_udc.c model, which was proven
- * to bring the unmodified real-board ZVisor image (Zephyr UDC DWC3 driver) to
- * its "uart:~$" console.
- *
- * Implemented:
- *   - the DWC3 global/device registers used by drivers/usb/udc/udc_dwc3.c and
- *     its RK3588 quirk (reset values, GCTL/GUSB2PHYCFG/GUSB3PIPECTL storage,
- *     GSBUSCFG0, DCFG, DCTL, DEVTEN, DSTS, DALEPENA);
- *   - the event ring, its level-sensitive IRQ, GEVNTSIZ mask and GEVNTCOUNT
- *     write-to-consume semantics;
- *   - endpoint commands (DEPCFG, DEPXFERCFG, DEPSTRTXFER, DEPENDXFER,
- *     DEPSTARTCFG) and the DMA TRB rings for control and bulk IN transfers;
- *   - the CDC ACM request sequence SET_ADDRESS, SET_CONFIGURATION,
- *     SET_CONTROL_LINE_STATE and SET_LINE_CODING.
- *
- * CDC bulk IN (device -> host) is forwarded to the "chardev" backend.
- * Character-backend input is encoded into the data of CDC SET_LINE_CODING
- * requests, which is how the proven downstream model delivered console input
- * to the unmodified firmware stack.
- *
- * Not implemented (kept visible via qemu_log_mask(), see the evidence
- * contract): the 4 MiB window beyond the 64 KiB register bank, endpoint
- * commands other than the five listed above, USB reset/overrun event
- * generation beyond USBRST/CONNECTDONE, PHY/PIPE behavior and SuperSpeed.
- */
-
 #include "qemu/osdep.h"
 #include "chardev/char-fe.h"
 #include "hw/core/irq.h"

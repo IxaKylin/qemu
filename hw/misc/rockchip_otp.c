@@ -7,10 +7,6 @@
  *    Chao Liu <chao.liu@processmission.com>
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
- *
- * The automatic read interface exposes a bank of unprogrammed OTP words.
- * Each read command fills the data registers and sets the read-done status;
- * the status is cleared by a write-one-to-clear acknowledgement.
  */
 
 #include "qemu/osdep.h"

@@ -4,17 +4,6 @@
  * Copyright (c) 2026 Process Mission
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
- *
- * The endpoint is instantiated on the generic aarch64 'virt' machine with an
- * explicit user-mode net backend, so these tests cover the device in
- * isolation from the RK3588 machine:
- *
- *   - PCI identity, 64 KiB BAR2 and the one-vector MSI capability;
- *   - reset values and the registers the ZVisor driver polls during init
- *     (CHIP_CMD self-clear, TX_CONFIG revision, backup MAC, PHY_STATUS,
- *     interrupt mask/status, PHY/MAC OCP mailboxes);
- *   - TX descriptor consumption and the TX_POLL kick, RX descriptor fill and
- *     recycling, and MSI delivery from an unmasked interrupt status.
  */
 
 #include "qemu/osdep.h"

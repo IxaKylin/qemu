@@ -4,13 +4,6 @@
  * Copyright (c) 2026 Process Mission
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
- *
- * See include/hw/net/rtl8125.h for the modeled contract.  The register bank is
- * implemented as a small explicit MMIO handler over a register-file array: the
- * device is a PCIe endpoint with one MMIO BAR, a handful of registers with
- * side effects and a flat backing store for the rest.  There is no policy in
- * this tree that would select a generated register framework for a device of
- * this shape, and the neighboring PCI net devices use the same manual style.
  */
 
 #include "qemu/osdep.h"

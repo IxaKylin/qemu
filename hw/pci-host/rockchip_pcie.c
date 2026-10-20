@@ -4,8 +4,6 @@
  * Copyright (c) 2026 Process Mission
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
- *
- * See include/hw/pci-host/rockchip_pcie.h for the modeled contract.
  */
 
 #include "qemu/osdep.h"

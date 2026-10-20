@@ -6,13 +6,6 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
-/*
- * The device is instantiated by the rock-5b machine, so every test boots that
- * machine without firmware (qtest skips the firmware requirement) and talks to
- * the DWC3 window at 0xfc000000.  The IRQ output is intercepted at the device
- * QOM node; guest RAM is used for the event ring, TRBs and data buffers.
- */
-
 #include "qemu/osdep.h"
 #include "libqtest.h"
 #include "qemu/bitops.h"

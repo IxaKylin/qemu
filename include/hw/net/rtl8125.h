@@ -4,24 +4,6 @@
  * Copyright (c) 2026 Process Mission
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
- *
- * This is the RTL8125 Ethernet endpoint that the RK3588 pcie2x1l2 link is
- * wired to on the ROCK 5B family.  The register contract is taken from the
- * unmodified ZVisor Zephyr driver (eth_rtl8125.c) and the RTL8125B legacy
- * descriptor layout it programs:
- *
- *   - PCI configuration space with vendor/device 10ec:8125, class 0x020000,
- *     a 64 KiB 32-bit MMIO BAR2 and a one-vector MSI capability;
- *   - legacy TX/RX descriptor rings in guest RAM (16-byte descriptors with
- *     opts1/opts2/addr, OWN/FIRST/LAST/EOR bits), DMA through the PCI bus
- *     master address space;
- *   - 32-bit RTL8125 interrupt status/mask registers (W1C status) and MSI
- *     delivery through the PCI MSI capability;
- *   - PHY link state reported through PHY_STATUS plus the PHY/MAC OCP
- *     mailboxes used by the driver's autonegotiation and hardware-config
- *     sequences;
- *   - a QEMU net backend (NICState/NetClientInfo) so the endpoint carries
- *     real traffic (DHCPv4, ARP, ICMP, TCP/UDP).
  */
 
 #ifndef HW_NET_RTL8125_H
