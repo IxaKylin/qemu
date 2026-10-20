@@ -38,6 +38,9 @@ config USB_EHCI_SYSBUS
     bool
     select USB_EHCI
 
+config DWC3_UDC
+    bool
+
 config RK3588_USB2_HOST
     bool
     select REGISTER
