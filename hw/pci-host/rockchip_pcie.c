@@ -1,35 +1,11 @@
 /*
- * Rockchip DesignWare PCIe host wrapper.
+ * Rockchip DesignWare PCIe host wrapper
  *
  * Copyright (c) 2026 Process Mission
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Subclasses TYPE_DESIGNWARE_PCIE_HOST and adds:
- *
- *   - Rockchip APB vendor register window (sysbus mmio[1]).
- *     Only PCIE_CLIENT_LTSSM_STATUS (0x300) is load-bearing: it reports
- *     either L0/link-up or detect/link-down according to the link-up
- *     property. Every other
- *     APB offset is RAZ/WI so the driver's PCIE_CLIENT_* writes
- *     (GENERAL_CON mode set, HOT_RESET_CTRL LTSSM enhance, POWER_CON
- *     clkreq, INTR_MASK_LEGACY) land without aborting (D-15).
- *
- *   - The inherited 4 KiB DBI mmio (sysbus mmio[0]) covers the DWC
- *     core Type-0 header / Port-Logic / iATU viewport / MSI block that
- *     designware.c implements. A device-owned RAZ/WI region covers the
- *     rest of the 4 MiB DBI window, including DBI2 at +0x100000.
- *
- *   - The board's CFG window is served by the designware root's outbound
- *     CFG viewports; the guest programs them in dw_pcie_config_ecam_iatu
- *     and designware.c maps viewport->cfg at the programmed base - no
- *     static alias is needed here.
- *
- * IRQ wiring: the parent designware host already exports 5 sysbus IRQs
- * (0..3 = INTA..INTD, 4 = MSI). This subclass adds three more sysbus
- * IRQs (5 = err, 6 = pmc, 7 = sys) for Rockchip-specific inert lines. The
- * board maps 0..3 -> GIC SPI 260 (legacy), 4 -> 261 (msg/MSI),
- * 5 -> 259 (err), 6 -> 262 (pmc), 7 -> 263 (sys).
+ * See include/hw/pci-host/rockchip_pcie.h for the modeled contract.
  */
 
 #include "qemu/osdep.h"
@@ -43,11 +19,11 @@
 #include "hw/pci-host/rockchip_pcie.h"
 
 /*
- * PCIE_CLIENT_LTSSM_STATUS (APB 0x300). Driver reads bits 17:16 for
- * link-up (0b11 = up) and bits 5:0 for LTSSM state (L0 = 0x11). Pin
- * both when the link-up property is enabled.
+ * PCIE_CLIENT_LTSSM_STATUS (APB 0x300).  Bits 17:16 are the link-up status
+ * (0b11 = up); bits 5:0 carry the LTSSM state (0x11 = L0).  The RK3588
+ * pcie_dw_rockchip driver polls exactly (BIT(16) | BIT(17)).
  */
-#define ROCKCHIP_PCIE_LTSSM_LINK_UP   0x00030011u
+#define ROCKCHIP_PCIE_LTSSM_LINK_UP 0x00030011u
 
 static uint64_t rockchip_pcie_apb_read(void *opaque, hwaddr offset,
                                        unsigned size)
@@ -58,31 +34,27 @@ static uint64_t rockchip_pcie_apb_read(void *opaque, hwaddr offset,
     case ROCKCHIP_PCIE_APB_LTSSM_STATUS:
         return s->link_up ? ROCKCHIP_PCIE_LTSSM_LINK_UP : 0;
     default:
-        /*
-         * All other PCIE_CLIENT_* regs are write-only from the driver's
-         * perspective; reads return 0 (reset value). The driver does
-         * not read them at probe, so any value is fine - 0 is the
-         * documented reset value for the load-bearing intr/mask regs.
-         */
+        qemu_log_mask(LOG_UNIMP,
+                      "rockchip-pcie: unimplemented APB read at 0x%"
+                      HWADDR_PRIx " size %u\n", offset, size);
         return 0;
     }
 }
-
-static const Property rockchip_pcie_host_properties[] = {
-    DEFINE_PROP_BOOL("link-up", RockchipPCIEHost, link_up, true),
-    DEFINE_PROP_UINT32("domain", RockchipPCIEHost, domain, 0),
-};
 
 static void rockchip_pcie_apb_write(void *opaque, hwaddr offset, uint64_t val,
                                     unsigned size)
 {
     /*
-     * Discard silently. The RK driver uses HIWORD-MASK writes to set
-     * RC mode, LTSSM enable, LTSSM enhance, clkreq, and INTx masks;
-     * none of these have behavioral effect in the substitution model
-     * but the writes MUST land (D-15: AArch64 aborts unassigned
-     * writes).
+     * GENERAL_CON (RC mode / LTSSM enable), HOT_RESET_CTRL, POWER_CON and
+     * INTR_MASK_LEGACY are write-only control registers from the driver's
+     * point of view.  They have no behavioral effect in the substitution
+     * model, but the writes MUST land: an AArch64 access to an unassigned
+     * address aborts the CPU.
      */
+    qemu_log_mask(LOG_UNIMP,
+                  "rockchip-pcie: unimplemented APB write at 0x%"
+                  HWADDR_PRIx " size %u value 0x%" PRIx64 "\n",
+                  offset, size, val);
 }
 
 static const MemoryRegionOps rockchip_pcie_apb_ops = {
@@ -100,14 +72,22 @@ static const MemoryRegionOps rockchip_pcie_apb_ops = {
 };
 
 static uint64_t rockchip_pcie_dbi_tail_read(void *opaque, hwaddr offset,
-                                             unsigned size)
+                                            unsigned size)
 {
+    qemu_log_mask(LOG_UNIMP,
+                  "rockchip-pcie: unimplemented DBI read at 0x%" HWADDR_PRIx
+                  " size %u\n",
+                  ROCKCHIP_PCIE_DBI_CORE_SIZE + offset, size);
     return 0;
 }
 
 static void rockchip_pcie_dbi_tail_write(void *opaque, hwaddr offset,
-                                          uint64_t value, unsigned size)
+                                         uint64_t value, unsigned size)
 {
+    qemu_log_mask(LOG_UNIMP,
+                  "rockchip-pcie: unimplemented DBI write at 0x%" HWADDR_PRIx
+                  " size %u value 0x%" PRIx64 "\n",
+                  ROCKCHIP_PCIE_DBI_CORE_SIZE + offset, size, value);
 }
 
 static const MemoryRegionOps rockchip_pcie_dbi_tail_ops = {
@@ -129,29 +109,17 @@ static void rockchip_pcie_host_realize(DeviceState *dev, Error **errp)
     snprintf(s->root_bus_path, sizeof(s->root_bus_path), "%04x:%02x",
              s->domain, s->parent_obj.bus_nr);
 
-    /*
-     * Realize the parent designware host first. This registers its
-     * 4 KiB DBI mmio at sysbus mmio[0] and its 5 sysbus IRQs
-     * (0..3 = INTA..INTD, 4 = MSI).
-     */
+    /* Realize the DesignWare parent first: it registers sysbus mmio[0] and
+     * the five IRQ outputs (INTA..INTD, legacy MSI). */
     rkpc->parent_realize(dev, errp);
-    if (*errp) {
+    if (errp && *errp) {
         return;
     }
 
-    /*
-     * Three Rockchip-specific inert IRQs (err/pmc/sys). legacy (INTA..INTD) and
-     * msg (MSI) come from the parent. The board wires all five logical
-     * IRQs to the GIC.
-     */
-    sysbus_init_irq(sbd, &s->err_irq);    /* index 5 */
-    sysbus_init_irq(sbd, &s->pmc_irq);    /* index 6 */
-    sysbus_init_irq(sbd, &s->sys_irq);    /* index 7 */
+    sysbus_init_irq(sbd, &s->err_irq);
+    sysbus_init_irq(sbd, &s->pmc_irq);
+    sysbus_init_irq(sbd, &s->sys_irq);
 
-    /*
-     * RK APB vendor register window (sysbus mmio[1]). LTSSM pinned,
-     * everything else RAZ/WI.
-     */
     memory_region_init_io(&s->apb, OBJECT(s), &rockchip_pcie_apb_ops, s,
                           "rockchip-pcie-apb", 0x10000);
     sysbus_init_mmio(sbd, &s->apb);
@@ -170,6 +138,14 @@ void rockchip_pcie_host_set_link_up(DeviceState *dev, bool up)
     s->link_up = up;
 }
 
+PCIBus *rockchip_pcie_host_secondary_bus(DeviceState *dev)
+{
+    RockchipPCIEHost *s = ROCKCHIP_PCIE_HOST(dev);
+
+    return PCI_BUS(qdev_get_child_bus(DEVICE(&s->parent_obj.root),
+                                      "dw-pcie"));
+}
+
 static const char *rockchip_pcie_host_root_bus_path(
     PCIHostState *host_bridge, PCIBus *rootbus)
 {
@@ -178,11 +154,7 @@ static const char *rockchip_pcie_host_root_bus_path(
     return s->root_bus_path;
 }
 
-/*
- * The firmware path starts with the links down and the kernel raises them
- * via PSCI; carry the dynamic link state across migration so the
- * destination keeps reporting the same LTSSM status.
- */
+/* Preserve the dynamic link state across migration. */
 static const VMStateDescription vmstate_rockchip_pcie_host = {
     .name = "rockchip-pcie-host",
     .version_id = 1,
@@ -193,6 +165,11 @@ static const VMStateDescription vmstate_rockchip_pcie_host = {
         VMSTATE_BOOL(link_up, RockchipPCIEHost),
         VMSTATE_END_OF_LIST()
     },
+};
+
+static const Property rockchip_pcie_host_properties[] = {
+    DEFINE_PROP_BOOL("link-up", RockchipPCIEHost, link_up, true),
+    DEFINE_PROP_UINT32("domain", RockchipPCIEHost, domain, 0),
 };
 
 static void rockchip_pcie_host_class_init(ObjectClass *klass, const void *data)
@@ -206,7 +183,6 @@ static void rockchip_pcie_host_class_init(ObjectClass *klass, const void *data)
     device_class_set_props(dc, rockchip_pcie_host_properties);
     dc->vmsd = &vmstate_rockchip_pcie_host;
     hc->root_bus_path = rockchip_pcie_host_root_bus_path;
-    /* Not user-creatable; instantiated by the board. */
     dc->user_creatable = false;
 }
 
