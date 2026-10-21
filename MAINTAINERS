@@ -1085,7 +1085,9 @@ F: configs/devices/aarch64-softmmu/rk3588*.mak
 F: configs/devices/aarch64-softmmu/rock-5b-plus.mak
 F: docs/system/arm/rk3588.rst
 F: hw/arm/rk3588*
-F: hw/arm/rock5b_plus.c
+F: hw/arm/rock-5b-plus.c
+F: hw/arm/rk3588-evb.c
+F: hw/arm/rk3588s-roc-pc.c
 F: hw/*/rk3588*
 F: hw/misc/rockchip_iommu.c
 F: include/hw/*/rk3588*
