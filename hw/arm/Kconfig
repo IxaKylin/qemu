@@ -296,7 +296,6 @@ config RK3588S_ROC_PC
     default y
     depends on TCG && AARCH64
     select RK3588
-    select RK3588_LEGACY_MACHINE
     select DWMAC4
 
 config ROCK_5B_PLUS

@@ -30,7 +30,7 @@ static QTestState *rk3588s_roc_pc_qtest_start(unsigned int cpus)
 
 static void test_rk3588s_roc_pc_machine_creation(void)
 {
-    QTestState *qts = rk3588s_roc_pc_qtest_start(1);
+    QTestState *qts = rk3588s_roc_pc_qtest_start(8);
 
     qtest_writel(qts, RK3588_RAM_BASE, 0x3588);
     g_assert_cmphex(qtest_readl(qts, RK3588_RAM_BASE), ==, 0x3588);
