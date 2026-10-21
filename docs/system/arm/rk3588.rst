@@ -4,240 +4,218 @@
 Rockchip RK3588 Boards
 ======================
 
-The RK3588 machines are local downstream models for booting Linux and firmware
-images built for Rockchip RK3588 boards.  They support QEMU's direct Arm Linux
-boot path and a downstream firmware path that runs the Rockchip TPL/SPL image,
-validates the U-Boot FIT loadables, hands off to U-Boot proper, and lets
-U-Boot boot Linux or ZVM test images from modeled MMC media.
+QEMU models four machines built around the Rockchip RK3588 SoC.  The
+``rock-5b`` and ``rock-5b-plus`` models are the two ROCK 5B variants and
+are documented together as the ROCK 5B family; the ``rk3588-evb`` and
+``rk3588s-roc-pc`` models are the legacy RK3588 EVB and ROC-RK3588S-PC
+boards.  All of them support Linux and firmware images built for Rockchip
+RK3588 boards.  The ``rock-5b`` machine supports the current RK3588 SoC
+device split; ``rock-5b-plus`` and the two EVB/ROC models use the legacy
+machine implementation.
 
-Three board machines are available.  Each board has its own machine source
-file and build-time Kconfig entry; the common ``rk3588`` type is abstract and
-contains only shared SoC construction and boot orchestration:
+.. list-table:: Supported RK3588 machines
+   :header-rows: 1
+   :widths: 20 22 20 38
 
-``rk3588-evb``
-  Rockchip RK3588 EVB-style board.  Firmware boot reads the Rockchip RKNS
-  image from ``if=sd,index=0`` and exposes it as the non-removable eMMC
-  controller.
+   * - Machine
+     - Board
+     - SoC split
+     - Functional focus
+   * - ``rock-5b``
+     - Radxa ROCK 5B
+     - ``rk3588`` SoC device
+     - U-Boot/``-kernel`` boot, Type-C USB CDC, PCIe/RTL8125, SD/MMC
+   * - ``rock-5b-plus``
+     - Radxa ROCK 5B+
+     - legacy machine
+     - Radxa SDK/image firmware boot, SPI NOR + SD payloads, PCIe
+   * - ``rk3588-evb``
+     - Rockchip RK3588 EVB
+     - legacy machine
+     - RKNS firmware boot, direct Linux, GMAC, RKNPU
+   * - ``rk3588s-roc-pc``
+     - Firefly ROC-RK3588S-PC
+     - legacy machine
+     - SD boot, DWMAC4, RKNPU
 
-``rk3588s-roc-pc``
-  Firefly ROC-RK3588S-PC board, exposed by QEMU as ``rk3588s-roc-pc`` and
-  using the hardware compatible ``rockchip,rk3588s-firefly-roc-pc``.
-  Firmware boot reads the Rockchip RKNS image from ``if=sd,index=2`` and
-  exposes it through the SDMMC/TF-card controller used by the package's
-  ``mmc dev 1`` boot script.  This machine maps the fixed ZVM guest/shared RAM
-  windows by default, corresponding to the real board's larger DRAM layout.
+Implementation status
+---------------------
 
-``rock-5b-plus``
-  Radxa ROCK 5B+ with LPDDR5, the two board PCIe hosts, and the firmware
-  compatibility profile needed by Radxa's RK3588 SDK image.  With separate
-  board media, firmware boot reads SPI NOR from ``if=mtd,index=0`` and reads
-  the SD payload media from ``if=sd,index=2`` (the controller selected by
-  U-Boot's ``mmc dev 1``).  A complete legacy Radxa image at
-  ``if=sd,index=0`` remains accepted when no SPI drive is supplied.
+The ``rock-5b`` machine is built on the split RK3588 SoC device
+(``hw/arm/rk3588.c``) and the board machine
+(``hw/arm/rock-5b.c``); its supported devices are described below.
+
+``rk3588-evb``, ``rk3588s-roc-pc`` and ``rock-5b-plus`` are still built
+on the legacy monolithic RK3588 machine base and its device models.
+They are kept functional and tested, but they are not yet migrated onto
+the split SoC device; that migration is tracked separately.
+
+ROCK 5B
+-------
+
+The ``rock-5b`` machine models the Radxa ROCK 5B single-board computer,
+which is built around the Rockchip RK3588 SoC.
 
 Supported devices
------------------
+~~~~~~~~~~~~~~~~~
 
-The machines currently model or stub the devices needed by the downstream
-RK3588 kernel and ZVM smoke tests:
+The ``rock-5b`` machine supports the following devices:
 
-* 8 Arm cores matching the RK3588 big.LITTLE layout: Cortex-A55 CPUs 0-3 and
-  Cortex-A76 CPUs 4-7.  Under TCG the CPU objects expose EL2 and EL3 for the
-  firmware and ZVM paths.  The RK3588 machines do not install RK3588-only CPU
-  compatibility properties for EL2 FP/SIMD traps or EL2 PAN handling.
-* GICv3 with two ITS blocks and LPI support.
-* All ten RK3588 UARTs (UART0-UART9) through QEMU's ``serial_mm``
-  16550-compatible model, each with a DesignWare APB UART vendor
-  register cover (USR @0x7c).  Only the ports with I/O routed out on
-  the ROCK 5B+ (UART1, UART2, UART3, UART4, UART7) bind a serial
-  chardev: UART2 keeps ``serial_hd(0)`` as the console, the others
-  map to ``-serial`` slots 1..4 in table order.  The remaining
-  ports (UART0, UART5, UART6, UART8, UART9) are modeled without
-  external output.
-* Rockchip GPIO banks.
-* Dedicated RK3588 PMU0/PMU1/SYS GRF banks, plus reusable Rockchip RAM-backed
-  syscon blocks for IOC and firewall-style register banks.
-* Dedicated RK3588 DDR controller/PHY windows and the BL31 DDR runtime
-  descriptor used by the vendor firmware.
-* Rockchip secure timer stub.
-* RK3588 CRU and SCMI-over-SMC clock/reset support.
-* SDHCI eMMC and Synopsys DesignWare MMC for the SD-card controller.
-* RK3588 SFC with an XTX XT25F128 SPI NOR device on chip select 0.
-* Synopsys DWMAC4 GMAC0 and GMAC1.
-* Rockchip DesignWare PCIe host wrapper, including MSI/MSI-X through GIC ITS.
-* Firmware-only USB2 EHCI/OHCI register windows used by U-Boot bootflow
-  scanning.
-* Optional RK3588 RKNN/RKNPU core register model, enabled with
-  ``-machine ...,rknpu=on``.  This exposes the three RK3588 RKNN cores and
-  implements hardware-pipeline execution for register-level jobs submitted
-  through the Linux mainline ``rocket`` or vendor ``rknpu`` driver.
+* 4 Cortex-A55 and 4 Cortex-A76 CPUs
+* GICv3 with two ITS blocks, including LPIs and MSI
+* the architectural timers
+* UART1 through UART9
+* Rockchip SFC with a 16 MiB SPI NOR flash (XTX XT25F128)
+* Clock and reset unit (CRU); clock, soft-reset and vendor reset-status
+  registers are modeled as storage registers with the Rockchip high-word
+  write mask, including the reset read-back used by real firmware
+* OTP controller
+* Type-C USB port: DWC3 device-mode controller with a CDC ACM console bridge
+* PCIe2x1l2 host bridge with an RTL8125 2.5GbE endpoint (RX/TX, MSI and
+  PHY link state; attach a QEMU network backend with ``-nic``)
+* SD/MMC controller (dw_mmc) with an SD card on ``if=sd,index=2``
 
-The SFC model is the register-driven SPI-memory controller used by the
-Rockchip Linux and U-Boot drivers.  It supports JEDEC/SFDP discovery, PIO
-transfers, and DMA transfers.  ``SPI`` in the RK3588 machine source also names
-GIC Shared Peripheral Interrupt numbers; it is not a second SPI controller.
+The machine always uses all eight CPUs and supports 128 MiB to 16 GiB
+of RAM, with 2 GiB as the default.
 
-The optional RKNPU model exposes the three accelerator cores and their
-Rockchip IOMMU.  It is enabled with ``-machine ...,rknpu=on``.  The selected
-machine type determines the guest-visible binding: ``rk3588-evb`` and
-``rock-5b-plus`` use the aggregate binding expected by the vendor ``rknpu``
-driver, while ``rk3588s-roc-pc`` exposes the per-core binding used by the
-mainline ``rocket`` driver.
+Boot options
+~~~~~~~~~~~~
 
-Jobs may be submitted through PC-fetched command descriptors or slave-mode
-register banks.  PC descriptors inherit register values not rewritten by a
-later sparse descriptor.  The banked register state and any in-flight task are
-included in migration state.  The IOMMU implements the mapping, invalidation,
-translation, and permission-fault behavior required by both drivers.
+The ``rock-5b`` machine boots U-Boot proper when ``-bios`` is given and
+Linux directly when ``-kernel`` is given; one of the two is required.
+Both methods start the primary CPU in non-secure EL2 and provide PSCI
+through SMC calls. DRAM and clocks are assumed to be initialized;
+BootROM, DDR training firmware, SPL and BL31 are not modeled.
 
-The functional backend is register-driven and does not identify model names,
-task numbers, or fixed tensor shapes.  The implemented subset covers INT8 and
-FP16 CNA/CORE/DPU pipelines for matrix multiplication and direct or depthwise
-convolution, DPU-RDMA data movement and arithmetic, conversion and LUT stages,
-and PPU identity and max-pooling operations.  Tensor dimensions, strides,
-valid and storage channels, layouts, and DMA addresses are decoded from the
-submitted register state.
+U-Boot proper is supplied as a raw binary with ``-bios``. QEMU loads it
+at ``0x00200000``, so it must be linked for that address. The device tree
+is taken from the Linux FIT image loaded by U-Boot, so ``-dtb`` cannot be
+used with this method.
 
-The model has been exercised with unmodified ``rocket`` and vendor ``rknpu``
-drivers and with RKNN Runtime workloads.  This validates the implemented
-formats and stage combinations, but does not imply complete RK3588 NPU or
-model coverage.  Unsupported active controls and layouts fail explicitly
-rather than being interpreted as a known workload profile.  Host-memory and
-work limits bound functional execution so malformed guest jobs cannot block or
-exhaust QEMU.
+By default RAM above the 4 GiB peripheral hole is mapped at
+``0x100000000``, matching the reference U-Boot/Linux image set. ZVisor's
+fixed stage-2 guest windows require that bank at ``0x400000000``, so the
+ZVisor boot adds ``-machine rock-5b,high-ram-base=0x400000000``. The
+property may be used with either boot method.
 
-Common IP boundaries
---------------------
+Direct Linux boot supplies an AArch64 Linux ``Image`` with ``-kernel``
+and a device tree with ``-dtb``; ``-initrd`` and ``-append`` are optional.
+QEMU does not generate a device tree for this machine.
 
-Several blocks are modeled as Rockchip- or DesignWare-style reusable IP, rather
-than as RK3588-only devices:
+Running
+~~~~~~~
 
-* ``rockchip-syscon`` covers RAM-backed GRF/IOC/firewall register banks and
-  implements Rockchip HIWORD writes.
-* ``rockchip-stimer`` covers the secure timer register layout used by Rockchip
-  firmware.
-* ``dw-apb-uart-vendor`` covers the Synopsys DesignWare APB UART extension
-  window above the 16550-compatible core.  The UART core itself is QEMU's
-  reusable ``serial_mm`` 16550-compatible model.
-* ``rockchip-dwcmshc-vendor`` covers the Rockchip vendor window above the
-  SDHCI core for DWCMSHC eMMC controllers.  The SDHCI SDMA buffer-boundary
-  behavior is generic SDHCI logic, not RK3588-specific logic.
-* ``dw-mmc`` covers the Synopsys DesignWare MMC register bank, PIO FIFO data
-  ports, and IDMAC descriptor flow used by the RK3588 SD-card controller.
-* ``rockchip-pcie-host`` wraps QEMU's DesignWare PCIe host and adds the
-  Rockchip APB vendor window expected by the ``dw-rockchip`` Linux driver.
-  Address mapping, compatible strings, MSI routing, and interrupt numbers stay
-  in the RK3588 board code.
+Serial ports are assigned as follows:
 
-All MMIO register behavior is implemented outside the machine sources.  The
-RK3588 CRU, GRF, DDR, ATF DDR runtime descriptor, firmware compatibility MMIO,
-SCMI, secure OTP, and firmware USB2 host windows live in independently built
-devices under the corresponding ``hw/*`` subsystem directories.  The common
-machine source only maps and wires those devices and implements SoC boot-flow
-orchestration such as BootROM loading, PSCI/GIC handoff, and the
-SPL/BL31-to-U-Boot compatibility path.  The USB2 device is intentionally a
-firmware-oriented register model; it supplies the reset-visible EHCI/OHCI state
-U-Boot needs while scanning boot devices.
+* ``-serial`` slot 0: the Type-C USB CDC console implemented by the DWC3
+  device-mode controller (the console used by ZVisor firmware).
+* ``-serial`` slot 1: UART2, the debug console on the board header and the
+  console used by U-Boot and Linux.
+* further ``-serial`` options connect to UART1 and UART3 through UART9 in
+  that order.
 
-Direct Linux Boot
------------------
+Because UART2 is on slot 1, a Linux or U-Boot console on stdio is selected
+with ``-serial null -serial mon:stdio``. The USB CDC console can be attached
+to a host socket with a separate character backend, for example
+``-chardev socket,id=usbcon,path=/tmp/rock5b-usb-cdc.sock,server=on,wait=off
+-serial chardev:usbcon``; the host side is then a plain serial port over the
+emulated Type-C connection.
 
-The following command boots the RK3588 Linux image and initramfs stored under
-``build/agent`` on the EVB machine, and attaches the smoke-test eMMC image, the
-board GMAC, and one PCIe virtio-net device:
+U-Boot proper boot
+^^^^^^^^^^^^^^^^^^
+
+With ``u-boot-dtb.bin`` and ``spi-nor.img``:
 
 .. code-block:: bash
 
-   $ build/qemu-system-aarch64 \
-       -accel tcg \
-       -machine rk3588-evb \
-       -smp 2 \
-       -m 1G \
-       -kernel build/agent/linux-src/arch/arm64/boot/Image \
-       -initrd build/agent/initramfs.cpio.gz \
-       -append "console=ttyS2,1500000n8 rdinit=/init" \
-       -drive if=sd,file=build/agent/rk3588-modeling/logs/emmc-smoke.img,format=raw \
-       -nic user,model=gmac0 \
-       -netdev user,id=vnet0 \
-       -device virtio-net-pci,netdev=vnet0 \
-       -serial mon:stdio \
-       -display none
+   $ qemu-system-aarch64 \
+       -machine rock-5b -m 2G -smp 8 \
+       -display none -monitor none \
+       -serial null -serial mon:stdio \
+       -bios u-boot-dtb.bin \
+       -drive if=mtd,index=0,file=spi-nor.img,format=raw
 
-The kernel console is UART2, so keep ``console=ttyS2,1500000n8`` in the kernel
-command line.
+The SPI NOR image must be exactly 16 MiB. Add ``snapshot=on`` to the
+drive option to discard guest writes.
 
-The ROC PC machine supports the same direct Linux boot path:
+ZVisor boot from SD over the Type-C USB CDC console
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. code-block:: bash
-
-   $ build/qemu-system-aarch64 \
-       -accel tcg \
-       -machine rk3588s-roc-pc \
-       -smp 2 \
-       -m 1G \
-       -kernel build/agent/linux-src/arch/arm64/boot/Image \
-       -initrd build/agent/initramfs.cpio.gz \
-       -append "console=ttyS2,1500000n8 rdinit=/init" \
-       -drive if=sd,file=build/agent/rk3588-modeling/logs/emmc-smoke.img,format=raw \
-       -nic user,model=gmac0 \
-       -netdev user,id=vnet0 \
-       -device virtio-net-pci,netdev=vnet0 \
-       -serial mon:stdio \
-       -display none
-
-ROCK 5B+ supports the same path with a Radxa SDK kernel.  For example:
+The machine boots the unmodified ZVisor firmware built for the real board
+with a U-Boot that can read the ProcessONE SD card layout: U-Boot scans the
+modeled ``dw_mmc`` controller, loads ``boot.scr``, stages the payloads in
+DRAM and enters ZVisor with ``bootm``. ZVisor's console and shell then
+appear on the emulated Type-C USB CDC port. An RTL8125 user-mode network is
+attached with ``-nic`` for its DHCP/network stack:
 
 .. code-block:: bash
 
-   $ build/qemu-system-aarch64 \
-       -accel tcg \
-       -machine rock-5b-plus \
-       -smp 8 \
-       -m 1G \
-       -kernel Image \
-       -initrd initramfs.cpio.gz \
-       -append "console=ttyS2,1500000n8 earlycon=uart8250,mmio32,0xfeb50000,1500000n8 keep_bootcon rdinit=/init" \
-       -serial mon:stdio \
-       -display none
+   $ qemu-system-aarch64 \
+       -machine rock-5b,high-ram-base=0x400000000 -m 8G -smp 8 \
+       -display none -monitor none \
+       -chardev socket,id=usbcon,path=/tmp/rock5b-usb-cdc.sock,server=on,wait=off \
+       -serial chardev:usbcon \
+       -serial file:uboot-uart2.log \
+       -bios u-boot-dtb.bin \
+       -drive if=mtd,index=0,file=spi-nor-mmc.img,format=raw,snapshot=on \
+       -drive if=sd,index=2,file=sd-payload.img,format=raw \
+       -nic user,model=rtl8125
 
-Firmware U-Boot Boot
---------------------
+Connect the host side with ``socat - UNIX-CONNECT:/tmp/rock5b-usb-cdc.sock``
+and wait for the ``uart:~$`` prompt. See ``scripts/rock5b-usb/`` for the
+remote-build, U-Boot, SD-media and boot helpers used to produce and run
+these images.
 
-The firmware path expects a raw eMMC image containing Rockchip's combined
-``u-boot-rockchip.bin`` at LBA 64:
+Direct Linux boot
+^^^^^^^^^^^^^^^^^
 
-.. code-block:: bash
-
-   $ truncate -s 64M build/agent/rk3588-firmware-boot/scratch/rk3588-firmware-emmc.img
-   $ dd if=build/agent/rk3588-firmware-boot/scratch/u-boot-build/u-boot-rockchip.bin \
-        of=build/agent/rk3588-firmware-boot/scratch/rk3588-firmware-emmc.img \
-        bs=512 seek=64 conv=notrunc
-
-Run the firmware smoke path with:
+With ``Image``, ``rootfs.cpio.gz`` and ``rk3588-rock-5b.dtb``:
 
 .. code-block:: bash
 
-   $ build/qemu-system-aarch64 \
-       -accel tcg \
-       -machine rk3588-evb \
-       -smp 1 \
-       -m 1G \
-       -drive if=sd,index=0,file=build/agent/rk3588-firmware-boot/scratch/rk3588-firmware-emmc.img,format=raw \
-       -serial mon:stdio \
-       -display none
+   $ qemu-system-aarch64 \
+       -machine rock-5b -m 2G -smp 8 \
+       -display none -monitor none \
+       -serial null -serial mon:stdio \
+       -kernel Image -initrd rootfs.cpio.gz -dtb rk3588-rock-5b.dtb \
+       -append "console=ttyS2,1500000n8 rdinit=/init"
 
-This path executes the Rockchip DDR/TPL image, enters U-Boot SPL, validates the
-FIT loadables, and replaces SPL's final ATF branch with a QEMU-private SMC that
-enters BL31 with SPL's BL31 parameter block.  BL31 runs through the modeled
-initialization path; a narrow BL31 exit shim then hands off to U-Boot proper at
-``0x800000`` with the EL2/GIC/PSCI state expected by the downstream smoke path.
-After the handoff the model exposes the USB2 host register windows so U-Boot
-bootflow probing can continue without taking a synchronous abort on unmapped
-firmware MMIO.  It is intended for downstream firmware bring-up coverage, not
-as a complete replacement for a real RK3588 PMU/secure firmware environment.
+Limitations
+~~~~~~~~~~~
+
+The machine is TCG-only; KVM is not supported. BootROM, DDR training,
+SPL and BL31 are not modeled; firmware boot starts U-Boot proper directly.
+The remaining RK3588 peripherals are unimplemented. ZVisor boot requires
+the ``high-ram-base=0x400000000`` option because its stage-2 guest windows
+are tied to that physical RAM bank; its virtual machines only run with the
+matching real ProcessONE guest payloads staged by U-Boot (the SD helper can
+use placeholders when the remote build host is unavailable). The SD
+controller supports one card on ``if=sd,index=2`` and the RTL8125 has no
+PHY/MAC calibration data (link state and packet path are modeled, the PHY
+data values are synthetic). The modeled DWC3 CDC console buffers transmit
+data across host connection establishment and paces console input so that
+the firmware's line-coding control bridge does not coalesce characters;
+under heavy host CPU oversubscription the guest can still log rare
+endpoint-command deadline warnings. Migration and VM snapshots are
+unsupported.
+
+ROCK 5B+
+--------
+
+The ``rock-5b-plus`` machine models the Radxa ROCK 5B+ single-board
+computer: LPDDR5, the two board PCIe hosts, and the firmware compatibility
+profile needed by Radxa's RK3588 SDK image.  With separate board media,
+firmware boot reads SPI NOR from ``if=mtd,index=0`` and reads the SD payload
+media from ``if=sd,index=2`` (the controller selected by U-Boot's
+``mmc dev 1``).  A complete legacy Radxa image at ``if=sd,index=0`` remains
+accepted when no SPI drive is supplied.
+
+The machine is still built on the legacy monolithic RK3588 machine base and
+shares the legacy device models with the boards described below.  Its
+board-specific firmware layout follows.
 
 Radxa ROCK 5B+ Firmware Image
------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The ``rock-5b-plus`` firmware profile accepts either a complete raw Radxa SDK
 image or the split layout used by the real board: SPI NOR contains U-Boot and
@@ -329,8 +307,235 @@ up at 1 Gbit/s with DHCP (10.0.2.15) and working ping/HTTP through
 ``-netdev user``.  (The stock Radxa kernel does not ship virtio PCI drivers;
 the image-shipped e1000e driver is used for the real-boot check.)
 
+Legacy RK3588 board machines
+----------------------------
+
+The RK3588 machines are local downstream models for booting Linux and firmware
+images built for Rockchip RK3588 boards.  They support QEMU's direct Arm Linux
+boot path and a downstream firmware path that runs the Rockchip TPL/SPL image,
+validates the U-Boot FIT loadables, hands off to U-Boot proper, and lets
+U-Boot boot Linux or ZVM test images from modeled MMC media.
+
+Two legacy board machines are available.  Each board has its own machine source
+file and build-time Kconfig entry; the common ``rk3588`` type is abstract and
+contains only shared SoC construction and boot orchestration:
+
+``rk3588-evb``
+  Rockchip RK3588 EVB-style board.  Firmware boot reads the Rockchip RKNS
+  image from ``if=sd,index=0`` and exposes it as the non-removable eMMC
+  controller.
+
+``rk3588s-roc-pc``
+  Firefly ROC-RK3588S-PC board, exposed by QEMU as ``rk3588s-roc-pc`` and
+  using the hardware compatible ``rockchip,rk3588s-firefly-roc-pc``.
+  Firmware boot reads the Rockchip RKNS image from ``if=sd,index=2`` and
+  exposes it through the SDMMC/TF-card controller used by the package's
+  ``mmc dev 1`` boot script.  This machine maps the fixed ZVM guest/shared RAM
+  windows by default, corresponding to the real board's larger DRAM layout.
+
+Supported devices
+~~~~~~~~~~~~~~~~~
+
+The machines currently model or stub the devices needed by the downstream
+RK3588 kernel and ZVM smoke tests:
+
+* 8 Arm cores matching the RK3588 big.LITTLE layout: Cortex-A55 CPUs 0-3 and
+  Cortex-A76 CPUs 4-7.  Under TCG the CPU objects expose EL2 and EL3 for the
+  firmware and ZVM paths.  The RK3588 machines do not install RK3588-only CPU
+  compatibility properties for EL2 FP/SIMD traps or EL2 PAN handling.
+* GICv3 with two ITS blocks and LPI support.
+* All ten RK3588 UARTs (UART0-UART9) through QEMU's ``serial_mm``
+  16550-compatible model, each with a DesignWare APB UART vendor
+  register cover (USR @0x7c).  Only the ports with I/O routed out on
+  the ROCK 5B+ (UART1, UART2, UART3, UART4, UART7) bind a serial
+  chardev: UART2 keeps ``serial_hd(0)`` as the console, the others
+  map to ``-serial`` slots 1..4 in table order.  The remaining
+  ports (UART0, UART5, UART6, UART8, UART9) are modeled without
+  external output.
+* Rockchip GPIO banks.
+* Dedicated RK3588 PMU0/PMU1/SYS GRF banks, plus reusable Rockchip RAM-backed
+  syscon blocks for IOC and firewall-style register banks.
+* Dedicated RK3588 DDR controller/PHY windows and the BL31 DDR runtime
+  descriptor used by the vendor firmware.
+* Rockchip secure timer stub.
+* RK3588 CRU and SCMI-over-SMC clock/reset support.
+* SDHCI eMMC and Synopsys DesignWare MMC for the SD-card controller.
+* RK3588 SFC with an XTX XT25F128 SPI NOR device on chip select 0.
+* Synopsys DWMAC4 GMAC0 and GMAC1.
+* Rockchip DesignWare PCIe host wrapper, including MSI/MSI-X through GIC ITS.
+* Firmware-only USB2 EHCI/OHCI register windows used by U-Boot bootflow
+  scanning.
+* Optional RK3588 RKNN/RKNPU core register model, enabled with
+  ``-machine ...,rknpu=on``.  This exposes the three RK3588 RKNN cores and
+  implements hardware-pipeline execution for register-level jobs submitted
+  through the Linux mainline ``rocket`` or vendor ``rknpu`` driver.
+
+The SFC model is the register-driven SPI-memory controller used by the
+Rockchip Linux and U-Boot drivers.  It supports JEDEC/SFDP discovery, PIO
+transfers, and DMA transfers.  ``SPI`` in the RK3588 machine source also names
+GIC Shared Peripheral Interrupt numbers; it is not a second SPI controller.
+
+The optional RKNPU model exposes the three accelerator cores and their
+Rockchip IOMMU.  It is enabled with ``-machine ...,rknpu=on``.  The selected
+machine type determines the guest-visible binding: ``rk3588-evb`` and
+``rock-5b-plus`` use the aggregate binding expected by the vendor ``rknpu``
+driver, while ``rk3588s-roc-pc`` exposes the per-core binding used by the
+mainline ``rocket`` driver.
+
+Jobs may be submitted through PC-fetched command descriptors or slave-mode
+register banks.  PC descriptors inherit register values not rewritten by a
+later sparse descriptor.  The banked register state and any in-flight task are
+included in migration state.  The IOMMU implements the mapping, invalidation,
+translation, and permission-fault behavior required by both drivers.
+
+The functional backend is register-driven and does not identify model names,
+task numbers, or fixed tensor shapes.  The implemented subset covers INT8 and
+FP16 CNA/CORE/DPU pipelines for matrix multiplication and direct or depthwise
+convolution, DPU-RDMA data movement and arithmetic, conversion and LUT stages,
+and PPU identity and max-pooling operations.  Tensor dimensions, strides,
+valid and storage channels, layouts, and DMA addresses are decoded from the
+submitted register state.
+
+The model has been exercised with unmodified ``rocket`` and vendor ``rknpu``
+drivers and with RKNN Runtime workloads.  This validates the implemented
+formats and stage combinations, but does not imply complete RK3588 NPU or
+model coverage.  Unsupported active controls and layouts fail explicitly
+rather than being interpreted as a known workload profile.  Host-memory and
+work limits bound functional execution so malformed guest jobs cannot block or
+exhaust QEMU.
+
+Common IP boundaries
+~~~~~~~~~~~~~~~~~~~~
+
+Several blocks are modeled as Rockchip- or DesignWare-style reusable IP, rather
+than as RK3588-only devices:
+
+* ``rockchip-syscon`` covers RAM-backed GRF/IOC/firewall register banks and
+  implements Rockchip HIWORD writes.
+* ``rockchip-stimer`` covers the secure timer register layout used by Rockchip
+  firmware.
+* ``dw-apb-uart-vendor`` covers the Synopsys DesignWare APB UART extension
+  window above the 16550-compatible core.  The UART core itself is QEMU's
+  reusable ``serial_mm`` 16550-compatible model.
+* ``rockchip-dwcmshc-vendor`` covers the Rockchip vendor window above the
+  SDHCI core for DWCMSHC eMMC controllers.  The SDHCI SDMA buffer-boundary
+  behavior is generic SDHCI logic, not RK3588-specific logic.
+* ``dw-mmc`` covers the Synopsys DesignWare MMC register bank, PIO FIFO data
+  ports, and IDMAC descriptor flow used by the RK3588 SD-card controller.
+* ``rockchip-pcie-host`` wraps QEMU's DesignWare PCIe host and adds the
+  Rockchip APB vendor window expected by the ``dw-rockchip`` Linux driver.
+  Address mapping, compatible strings, MSI routing, and interrupt numbers stay
+  in the RK3588 board code.
+
+All MMIO register behavior is implemented outside the machine sources.  The
+RK3588 CRU, GRF, DDR, ATF DDR runtime descriptor, firmware compatibility MMIO,
+SCMI, secure OTP, and firmware USB2 host windows live in independently built
+devices under the corresponding ``hw/*`` subsystem directories.  The common
+machine source only maps and wires those devices and implements SoC boot-flow
+orchestration such as BootROM loading, PSCI/GIC handoff, and the
+SPL/BL31-to-U-Boot compatibility path.  The USB2 device is intentionally a
+firmware-oriented register model; it supplies the reset-visible EHCI/OHCI state
+U-Boot needs while scanning boot devices.
+
+Direct Linux Boot
+~~~~~~~~~~~~~~~~~
+
+The following command boots the RK3588 Linux image and initramfs stored under
+``build/agent`` on the EVB machine, and attaches the smoke-test eMMC image, the
+board GMAC, and one PCIe virtio-net device:
+
+.. code-block:: bash
+
+   $ build/qemu-system-aarch64 \
+       -accel tcg \
+       -machine rk3588-evb \
+       -smp 2 \
+       -m 1G \
+       -kernel build/agent/linux-src/arch/arm64/boot/Image \
+       -initrd build/agent/initramfs.cpio.gz \
+       -append "console=ttyS2,1500000n8 rdinit=/init" \
+       -drive if=sd,file=build/agent/rk3588-modeling/logs/emmc-smoke.img,format=raw \
+       -nic user,model=gmac0 \
+       -netdev user,id=vnet0 \
+       -device virtio-net-pci,netdev=vnet0 \
+       -serial mon:stdio \
+       -display none
+
+The kernel console is UART2, so keep ``console=ttyS2,1500000n8`` in the kernel
+command line.
+
+The ROC PC machine supports the same direct Linux boot path:
+
+.. code-block:: bash
+
+   $ build/qemu-system-aarch64 \
+       -accel tcg \
+       -machine rk3588s-roc-pc \
+       -smp 2 \
+       -m 1G \
+       -kernel build/agent/linux-src/arch/arm64/boot/Image \
+       -initrd build/agent/initramfs.cpio.gz \
+       -append "console=ttyS2,1500000n8 rdinit=/init" \
+       -drive if=sd,file=build/agent/rk3588-modeling/logs/emmc-smoke.img,format=raw \
+       -nic user,model=gmac0 \
+       -netdev user,id=vnet0 \
+       -device virtio-net-pci,netdev=vnet0 \
+       -serial mon:stdio \
+       -display none
+
+ROCK 5B+ supports the same path with a Radxa SDK kernel.  For example:
+
+.. code-block:: bash
+
+   $ build/qemu-system-aarch64 \
+       -accel tcg \
+       -machine rock-5b-plus \
+       -smp 8 \
+       -m 1G \
+       -kernel Image \
+       -initrd initramfs.cpio.gz \
+       -append "console=ttyS2,1500000n8 earlycon=uart8250,mmio32,0xfeb50000,1500000n8 keep_bootcon rdinit=/init" \
+       -serial mon:stdio \
+       -display none
+
+Firmware U-Boot Boot
+~~~~~~~~~~~~~~~~~~~~
+
+The firmware path expects a raw eMMC image containing Rockchip's combined
+``u-boot-rockchip.bin`` at LBA 64:
+
+.. code-block:: bash
+
+   $ truncate -s 64M build/agent/rk3588-firmware-boot/scratch/rk3588-firmware-emmc.img
+   $ dd if=build/agent/rk3588-firmware-boot/scratch/u-boot-build/u-boot-rockchip.bin \
+        of=build/agent/rk3588-firmware-boot/scratch/rk3588-firmware-emmc.img \
+        bs=512 seek=64 conv=notrunc
+
+Run the firmware smoke path with:
+
+.. code-block:: bash
+
+   $ build/qemu-system-aarch64 \
+       -accel tcg \
+       -machine rk3588-evb \
+       -smp 1 \
+       -m 1G \
+       -drive if=sd,index=0,file=build/agent/rk3588-firmware-boot/scratch/rk3588-firmware-emmc.img,format=raw \
+       -serial mon:stdio \
+       -display none
+
+This path executes the Rockchip DDR/TPL image, enters U-Boot SPL, validates the
+FIT loadables, and replaces SPL's final ATF branch with a QEMU-private SMC that
+enters BL31 with SPL's BL31 parameter block.  BL31 runs through the modeled
+initialization path; a narrow BL31 exit shim then hands off to U-Boot proper at
+``0x800000`` with the EL2/GIC/PSCI state expected by the downstream smoke path.
+After the handoff the model exposes the USB2 host register windows so U-Boot
+bootflow probing can continue without taking a synchronous abort on unmapped
+firmware MMIO.  It is intended for downstream firmware bring-up coverage, not
+as a complete replacement for a real RK3588 PMU/secure firmware environment.
+
 U-Boot to Linux Boot
---------------------
+~~~~~~~~~~~~~~~~~~~~
 
 The complete U-Boot path uses a raw eMMC image that contains the Rockchip
 firmware at LBA 64 and a boot partition with ``extlinux.conf``, ``Image``,
@@ -364,7 +569,7 @@ U-Boot loads the kernel, initramfs, and DTB from eMMC, prints
 ``=== init done, exec sh ===``.
 
 ZVM on RK3588 EVB
------------------
+~~~~~~~~~~~~~~~~~
 
 The EVB ZVM smoke path uses an eMMC image and the upstream package's manual
 copy sequence with ``mmc dev 0``.  Enable the optional ZVM RAM windows for this
@@ -403,7 +608,7 @@ guest smoke path; use the ROC image below for the full Linux VM release-image
 layout.
 
 ZVM on ROC-RK3588S-PC
----------------------
+~~~~~~~~~~~~~~~~~~~~~
 
 The `RK3588 ZVM deployment guide
 <https://esnl.hnu.edu.cn/zvm/document/deploy_rk3588.html>`_ targets the
@@ -575,7 +780,7 @@ serial terminal.  With a matching 5.10.110 kernel and ``zshm.ko``, ZVM reports
 ``Start VM Successful`` for ``linux_os-1``.
 
 Known limitations
------------------
+~~~~~~~~~~~~~~~~~
 
 The current model is intended for kernel and firmware bring-up smoke testing.
 It does not model the closed PMU firmware or full EL3 MMU/xlat setup; the

@@ -1094,6 +1094,24 @@ F: tests/functional/aarch64/test_rk3588_rknpu.py
 F: tests/functional/aarch64/test_rock5b_plus.py
 F: tests/qtest/rk3588*
 F: tests/qtest/rock5b-plus-test.c
+F: hw/arm/rock-5b.c
+F: hw/arm/rk3588-machine.c
+F: include/hw/arm/rk3588.h
+F: hw/misc/rockchip_cru.c
+F: hw/misc/rockchip_otp.c
+F: hw/ssi/rockchip_sfc.c
+F: hw/usb/dwc3-udc.c
+F: include/hw/usb/dwc3-udc.h
+F: hw/pci-host/rockchip_pcie.c
+F: include/hw/pci-host/rockchip_pcie.h
+F: hw/net/rtl8125.c
+F: include/hw/net/rtl8125.h
+F: hw/sd/dw_mmc.c
+F: include/hw/sd/dw_mmc.h
+F: tests/qtest/dwc3-udc-test.c
+F: tests/qtest/rock-5b-test.c
+F: tests/qtest/rtl8125-test.c
+F: scripts/rock5b-usb/
 
 Phytium E2000Q machines
 M: Bin Meng <bin.meng@processmission.com>

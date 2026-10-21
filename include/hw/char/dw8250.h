@@ -10,6 +10,7 @@
 
 #include "hw/core/sysbus.h"
 #include "qom/object.h"
+#include "hw/char/serial-mm.h"
 
 #define TYPE_DW8250 "dw8250"
 OBJECT_DECLARE_SIMPLE_TYPE(DW8250State, DW8250)
@@ -19,7 +20,7 @@ struct DW8250State {
 
     MemoryRegion container;
     MemoryRegion ext_iomem;
-    DeviceState *serial_mm;
+    SerialMM serial_mm;
 
     uint8_t regshift;
 };

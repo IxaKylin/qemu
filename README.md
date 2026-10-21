@@ -46,6 +46,7 @@ The table below is the current map of machine models covered by this tree.
 | ARM | [`phytium-pomelo`](docs/system/arm/phytium_pomelo.rst) | ✅ | — | PM |
 | ARM | [`rk3588-evb`](docs/system/arm/rk3588.rst) | ✅ | ✅ | PM |
 | ARM | [`rk3588s-roc-pc`](docs/system/arm/rk3588.rst) | ✅ | ✅ | PM |
+| ARM | [`rock-5b`](docs/system/arm/rk3588.rst) | ✅ | ✅ | PM |
 | ARM | [`rock-5b-plus`](docs/system/arm/rk3588.rst) | ✅ | ✅ | PM |
 | ARM | [`s32k566-cvb-r52`](docs/system/arm/s32k5.rst) | ✅ | — | PM |
 | ARM | [`sf32lb52-devkit-lcd`](docs/system/arm/sf32lb52.rst) | ✅ | — | PM |

@@ -44,8 +44,13 @@ OBJECT_DECLARE_SIMPLE_TYPE(DwMmcState, DW_MMC)
 /* FIFO depth in 32-bit words (DTS fifo-depth = 0x100). */
 #define DW_MMC_FIFO_DEPTH       0x100
 
-/* IDMAC descriptor walker ring bound (sanity limit). */
-#define DW_MMC_IDMAC_MAX_DESCS  4096
+/*
+ * IDMAC descriptor walker ring bound (sanity limit).  A full 108 MiB
+ * transfer uses ~27k 4 KiB descriptors (or ~212k 512 B descriptors), so
+ * the bound must cover the largest single data command; the previous
+ * 4096 limit silently stopped after 16 MiB at 4 KiB descriptors.
+ */
+#define DW_MMC_IDMAC_MAX_DESCS  (1u << 20)
 
 struct DwMmcState {
     SysBusDevice parent_obj;

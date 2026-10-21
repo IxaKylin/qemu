@@ -827,6 +827,7 @@ static void test_rock_5b_plus_sfc_flash(void)
 
     /* Status register write/read-back (spi-nor quad-enable path). */
     qtest_writel(qts, RK3588_SFC_BASE + SFC_LEN_EXT, 0);
+    qtest_writel(qts, RK3588_SFC_BASE + SFC_LEN_EXT, 0);
     qtest_writel(qts, RK3588_SFC_BASE + SFC_CMD, SFC_OP_WREN);
     qtest_writel(qts, RK3588_SFC_BASE + SFC_LEN_EXT, 2);
     qtest_writel(qts, RK3588_SFC_BASE + SFC_CMD,
@@ -866,8 +867,10 @@ static void test_rock_5b_plus_sfc_flash(void)
      * NOR flash programming can only clear bits, so the sector must be
      * erased (all 0xff) before the pattern is written.
      */
+    qtest_writel(qts, RK3588_SFC_BASE + SFC_LEN_EXT, 0);
     qtest_writel(qts, RK3588_SFC_BASE + SFC_CMD, SFC_OP_WREN);
     g_assert_cmphex(qtest_readl(qts, RK3588_SFC_BASE + SFC_SR), ==, 0);
+    qtest_writel(qts, RK3588_SFC_BASE + SFC_LEN_EXT, 0);
     qtest_writel(qts, RK3588_SFC_BASE + SFC_CMD,
                  SFC_OP_ERASE_4K | SFC_CMD_DIR_WR | SFC_CMD_ADDR_24);
     qtest_writel(qts, RK3588_SFC_BASE + SFC_ADDR, 0x200);
@@ -881,6 +884,7 @@ static void test_rock_5b_plus_sfc_flash(void)
                     UINT32_MAX);
     g_assert_cmphex(qtest_readl(qts, RK3588_SFC_BASE + SFC_SR), ==, 0);
 
+    qtest_writel(qts, RK3588_SFC_BASE + SFC_LEN_EXT, 0);
     qtest_writel(qts, RK3588_SFC_BASE + SFC_CMD, SFC_OP_WREN);
     g_assert_cmphex(qtest_readl(qts, RK3588_SFC_BASE + SFC_SR), ==, 0);
     qtest_writel(qts, RK3588_SFC_BASE + SFC_LEN_EXT, 4);
@@ -899,13 +903,16 @@ static void test_rock_5b_plus_sfc_flash(void)
     g_assert_cmphex(qtest_readl(qts, RK3588_SFC_BASE + SFC_SR), ==, 0);
 
     /* DMA write of RAM contents to flash at 0x1400 (erase first). */
+    qtest_writel(qts, RK3588_SFC_BASE + SFC_LEN_EXT, 0);
     qtest_writel(qts, RK3588_SFC_BASE + SFC_CMD, SFC_OP_WREN);
     g_assert_cmphex(qtest_readl(qts, RK3588_SFC_BASE + SFC_SR), ==, 0);
+    qtest_writel(qts, RK3588_SFC_BASE + SFC_LEN_EXT, 0);
     qtest_writel(qts, RK3588_SFC_BASE + SFC_CMD,
                  SFC_OP_ERASE_4K | SFC_CMD_DIR_WR | SFC_CMD_ADDR_24);
     qtest_writel(qts, RK3588_SFC_BASE + SFC_ADDR, 0x1400);
     g_assert_cmphex(qtest_readl(qts, RK3588_SFC_BASE + SFC_SR), ==, 0);
     qtest_writel(qts, RK3588_RAM_BASE, 0x11223344);
+    qtest_writel(qts, RK3588_SFC_BASE + SFC_LEN_EXT, 0);
     qtest_writel(qts, RK3588_SFC_BASE + SFC_CMD, SFC_OP_WREN);
     g_assert_cmphex(qtest_readl(qts, RK3588_SFC_BASE + SFC_SR), ==, 0);
     qtest_writel(qts, RK3588_SFC_BASE + SFC_LEN_EXT, 4);
@@ -926,7 +933,9 @@ static void test_rock_5b_plus_sfc_flash(void)
     g_assert_cmphex(qtest_readl(qts, RK3588_SFC_BASE + SFC_SR), ==, 0);
 
     /* Re-erase 0x200: contents return to 0xff. */
+    qtest_writel(qts, RK3588_SFC_BASE + SFC_LEN_EXT, 0);
     qtest_writel(qts, RK3588_SFC_BASE + SFC_CMD, SFC_OP_WREN);
+    qtest_writel(qts, RK3588_SFC_BASE + SFC_LEN_EXT, 0);
     qtest_writel(qts, RK3588_SFC_BASE + SFC_CMD,
                  SFC_OP_ERASE_4K | SFC_CMD_DIR_WR | SFC_CMD_ADDR_24);
     qtest_writel(qts, RK3588_SFC_BASE + SFC_ADDR, 0x200);

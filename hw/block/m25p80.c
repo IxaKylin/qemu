@@ -645,6 +645,19 @@ static void flash_erase(Flash *s, int offset, FlashCMD cmd)
         abort();
     }
 
+    /*
+     * The flash ignores the low address bits of erase commands and erases
+     * the containing erase unit. Reject requests whose erase unit is not
+     * entirely within the device.
+     */
+    offset &= ~(len - 1);
+    if (offset + len > s->size) {
+        qemu_log_mask(LOG_GUEST_ERROR,
+                      "M25P80: erase at 0x%x for %u bytes is outside the "
+                      "device (size 0x%x)\n", offset, len, s->size);
+        return;
+    }
+
     trace_m25p80_flash_erase(s, offset, len);
 
     if ((s->pi->flags & capa_to_assert) != capa_to_assert) {
@@ -658,6 +671,9 @@ static void flash_erase(Flash *s, int offset, FlashCMD cmd)
     }
     memset(s->storage + offset, 0xff, len);
     flash_sync_area(s, offset, len);
+    if (get_man(s) == MAN_XTX) {
+        s->write_enable = false;
+    }
 }
 
 static inline void flash_sync_dirty(Flash *s, int64_t newpage)
@@ -847,6 +863,9 @@ static void complete_collecting_data(Flash *s)
             break;
         default:
             break;
+        }
+        if (s->write_enable) {
+            s->write_enable = false;
         }
         break;
     case BRWR:
@@ -1626,6 +1645,11 @@ static int m25p80_cs(SSIPeripheral *ss, bool select)
     if (select) {
         if (s->state == STATE_COLLECTING_VAR_LEN_DATA) {
             complete_collecting_data(s);
+        }
+        if (get_man(s) == MAN_XTX &&
+            s->state == STATE_PAGE_PROGRAM &&
+            s->cmd_in_progress != AAI_WP) {
+            s->write_enable = false;
         }
         s->len = 0;
         s->pos = 0;
