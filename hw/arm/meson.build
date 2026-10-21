@@ -22,8 +22,6 @@ arm_common_ss.add(when: 'CONFIG_PHYTIUM_POMELO',
 arm_common_ss.add(when: 'CONFIG_REALVIEW', if_true: files('realview.c'))
 arm_common_ss.add(when: 'CONFIG_SBSA_REF', if_true: files('sbsa-ref.c'))
 arm_common_ss.add(when: 'CONFIG_RK3588', if_true: files('rk3588.c'))
-arm_common_ss.add(when: 'CONFIG_RK3588_LEGACY_MACHINE',
-                  if_true: files('rk3588-machine.c'))
 arm_common_ss.add(when: 'CONFIG_ROCK5B', if_true: files('rock-5b.c'))
 arm_common_ss.add(when: 'CONFIG_RK3588_EVB', if_true: files('rk3588-evb.c'))
 arm_common_ss.add(when: 'CONFIG_RK3588S_ROC_PC', if_true: files('rk3588s-roc-pc.c'))

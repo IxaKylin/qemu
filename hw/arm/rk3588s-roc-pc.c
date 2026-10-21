@@ -30,7 +30,53 @@
 #include "hw/arm/boot.h"
 #include "hw/arm/bsa.h"
 #include "hw/arm/linux-boot-if.h"
-#include "rk3588-internal.h"
+#define RK3588_BROM_BOOTSOURCE_EMMC 2
+#define RK3588_BROM_BOOTSOURCE_SPINOR 3
+#define RK3588_BROM_BOOTSOURCE_SD 5
+
+#define RK3588_DRAM_TYPE_LPDDR4X 8
+#define RK3588_DRAM_TYPE_LPDDR5 9
+
+typedef struct RK3588FirmwareProfile {
+    bool unfused_secure_otp;
+    bool crypto_v2_sha256;
+    bool dynamic_fit_handoff;
+    bool atags_core;
+    uint64_t fit_offset;
+    uint64_t spi_fit_offset;
+    uint32_t fit_alignment;
+} RK3588FirmwareProfile;
+
+typedef enum RK3588RknpuFdtTopology {
+    RK3588_RKNPU_FDT_PER_CORE,
+    RK3588_RKNPU_FDT_AGGREGATE,
+} RK3588RknpuFdtTopology;
+
+typedef struct RK3588BoardConfig {
+    const char *machine_name;
+    const char *desc;
+    const char *ram_id;
+    const char *fdt_model;
+    const char * const *fdt_compatible;
+    size_t fdt_compatible_count;
+    bool firmware_spi;
+    unsigned int firmware_sd_unit;
+    uint32_t brom_bootsource;
+    uint32_t dram_type;
+    uint32_t gmac_mask;
+    unsigned int pcie3x4_num_lanes;
+    unsigned int pcie3x2_num_lanes;
+    bool pcie3x4_link_down;
+    bool pcie3x2_link_down;
+    unsigned int pcie2x1_mask; /* BIT(0) = pcie2x1l0, BIT(2) = pcie2x1l2 */
+    bool swap_gmac_aliases;
+    bool default_zvm_ram;
+    bool default_direct_ram_layout;
+    uint64_t default_ram_size;
+    RK3588RknpuFdtTopology rknpu_fdt_topology;
+    const RK3588FirmwareProfile *firmware_profile;
+} RK3588BoardConfig;
+
 
 #include "hw/gpio/rockchip_gpio.h"
 #include "hw/misc/rockchip_crypto_v2.h"
@@ -83,6 +129,7 @@
 
 #include <libfdt.h>
 
+#define TYPE_RK3588_MACHINE TYPE_RK3588S_ROC_PC_MACHINE
 OBJECT_DECLARE_SIMPLE_TYPE(RK3588MachineState, RK3588_MACHINE)
 
 static inline RK3588MachineState *rocpc_machine(const void *obj)

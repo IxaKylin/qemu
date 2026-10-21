@@ -280,15 +280,11 @@ config RK3588
     select RTL8125_PCI
     select UNIMP
 
-config RK3588_LEGACY_MACHINE
-    bool
-
 config RK3588_EVB
     bool
     default y
     depends on TCG && AARCH64
     select RK3588
-    select RK3588_LEGACY_MACHINE
     select DWMAC4
 
 config RK3588S_ROC_PC
@@ -303,7 +299,6 @@ config ROCK_5B_PLUS
     default y
     depends on TCG && AARCH64
     select RK3588
-    select RK3588_LEGACY_MACHINE
     select RK3588_SECURE_OTP
     select ROCKCHIP_CRYPTO_V2
 

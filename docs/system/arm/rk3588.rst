@@ -41,14 +41,13 @@ machine implementation.
 Implementation status
 ---------------------
 
-The ``rock-5b`` machine is built on the split RK3588 SoC device
-(``hw/arm/rk3588.c``) and the board machine
-(``hw/arm/rock-5b.c``); its supported devices are described below.
-
-``rk3588-evb``, ``rk3588s-roc-pc`` and ``rock-5b-plus`` are still built
-on the legacy monolithic RK3588 machine base and its device models.
-They are kept functional and tested, but they are not yet migrated onto
-the split SoC device; that migration is tracked separately.
+Each RK3588 board has a self-contained machine implementation in its
+own board file.  ``rock-5b`` uses the split RK3588 SoC device
+(``hw/arm/rk3588.c``); ``rk3588-evb``, ``rk3588s-roc-pc`` and
+``rock-5b-plus`` currently carry their existing device and
+firmware-boot implementation directly in their board files.  There is
+no shared ``rk3588-machine.c`` base; duplicated board code is
+intentional while the board device sets are unified.
 
 ROCK 5B
 -------
