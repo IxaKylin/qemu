@@ -283,6 +283,7 @@ static void rock5b_init(MachineState *ms)
 
     /* Initialize the SoC object. */
     object_initialize_child(OBJECT(s), "soc", &s->soc, TYPE_RK3588_SOC);
+    qdev_prop_set_uint32(DEVICE(&s->soc), "num-cpus", ms->smp.cpus);
     object_property_set_link(OBJECT(&s->soc), "memory",
                              OBJECT(get_system_memory()), &error_abort);
     rock5b_connect_serial(s);

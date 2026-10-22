@@ -109,6 +109,7 @@ typedef struct RK3588BoardConfig {
 #include "net/net.h"
 #include "system/block-backend.h"
 #include "hw/arm/machines-qom.h"
+#include "hw/arm/rk3588.h"
 #include "hw/char/dw-apb-uart-vendor.h"
 #include "hw/char/serial-mm.h"
 #include "hw/core/boards.h"
@@ -316,6 +317,7 @@ struct RK3588MachineState {
 
     struct arm_boot_info bootinfo;
     const RK3588BoardConfig *board;
+    RK3588SoCState soc;
     ARMCPU *cpu[RK3588_MAX_CPUS];
     DeviceState *gic;
     DeviceState *its[2];
@@ -1778,47 +1780,6 @@ static void *rk3588_get_dtb(const struct arm_boot_info *binfo, int *fdt_size)
     return fdt;
 }
 
-static void rk3588_create_cpus(RK3588MachineState *s)
-{
-    MachineState *ms = MACHINE(s);
-    MachineClass *mc = MACHINE_GET_CLASS(ms);
-    MemoryRegion *sysmem = get_system_memory();
-    const CPUArchIdList *possible_cpus = mc->possible_cpu_arch_ids(ms);
-
-    for (unsigned int n = 0; n < ms->smp.cpus; n++) {
-        g_autofree char *name = g_strdup_printf("cpu%u", n);
-        Object *cpuobj = object_new(possible_cpus->cpus[n].type);
-        CPUState *cs = CPU(cpuobj);
-
-        object_property_add_child(OBJECT(ms), name, cpuobj);
-        cs->cpu_index = n;
-        numa_cpu_pre_plug(&possible_cpus->cpus[n], DEVICE(cpuobj),
-                          &error_fatal);
-        object_property_set_int(cpuobj, "mp-affinity",
-                                possible_cpus->cpus[n].arch_id,
-                                &error_abort);
-        object_property_set_int(cpuobj, "cntfrq", RK3588_GTIMER_HZ,
-                                &error_abort);
-        object_property_set_link(cpuobj, "memory", OBJECT(sysmem),
-                                 &error_abort);
-
-        if (object_property_find(cpuobj, "reset-cbar")) {
-            object_property_set_int(cpuobj, "reset-cbar",
-                                    rk3588_memmap[RK3588_GIC_DIST].base,
-                                    &error_abort);
-        }
-        if (object_property_find(cpuobj, "has_el2")) {
-            object_property_set_bool(cpuobj, "has_el2", !kvm_enabled(),
-                                     &error_abort);
-        }
-        if (object_property_find(cpuobj, "has_el3")) {
-            object_property_set_bool(cpuobj, "has_el3", !kvm_enabled(),
-                                     &error_abort);
-        }
-        qdev_realize(DEVICE(cpuobj), NULL, &error_fatal);
-        s->cpu[n] = ARM_CPU(cpuobj);
-    }
-}
 
 static void rk3588_enable_psci_conduit(RK3588MachineState *s)
 {
@@ -3132,71 +3093,6 @@ static void rk3588_register_firmware_reset(RK3588MachineState *s)
     }
 }
 
-static void rk3588_create_gic(RK3588MachineState *s)
-{
-    MachineState *ms = MACHINE(s);
-    SysBusDevice *gicbusdev;
-    QList *redist_region_count;
-    uint32_t redist_capacity;
-
-    s->gic = qdev_new(gicv3_class_name());
-    object_property_add_child(OBJECT(s), "gic", OBJECT(s->gic));
-    qdev_prop_set_uint32(s->gic, "revision", 3);
-    qdev_prop_set_uint32(s->gic, "num-cpu", ms->smp.cpus);
-    qdev_prop_set_uint32(s->gic, "num-irq",
-                         RK3588_NUM_SPI_IRQS + GIC_INTERNAL);
-    qdev_prop_set_bit(s->gic, "has-security-extensions", true);
-    qdev_prop_set_bit(s->gic, "has-lpi", true);
-
-    redist_capacity = rk3588_memmap[RK3588_GIC_REDIST].size / GICV3_REDIST_SIZE;
-    redist_region_count = qlist_new();
-    qlist_append_int(redist_region_count, MIN(ms->smp.cpus, redist_capacity));
-    qdev_prop_set_array(s->gic, "redist-region-count", redist_region_count);
-    object_property_set_link(OBJECT(s->gic), "sysmem", OBJECT(get_system_memory()),
-                             &error_fatal);
-
-    gicbusdev = SYS_BUS_DEVICE(s->gic);
-    sysbus_realize_and_unref(gicbusdev, &error_fatal);
-    sysbus_mmio_map(gicbusdev, 0, rk3588_memmap[RK3588_GIC_DIST].base);
-    sysbus_mmio_map(gicbusdev, 1, rk3588_memmap[RK3588_GIC_REDIST].base);
-
-    for (unsigned int n = 0; n < ms->smp.cpus; n++) {
-        DeviceState *cpudev = DEVICE(s->cpu[n]);
-        int intidbase = RK3588_NUM_SPI_IRQS + n * GIC_INTERNAL;
-        static const int timer_irqs[] = {
-            [GTIMER_PHYS] = ARCH_TIMER_NS_EL1_IRQ,
-            [GTIMER_VIRT] = ARCH_TIMER_VIRT_IRQ,
-            [GTIMER_HYP] = ARCH_TIMER_NS_EL2_IRQ,
-            [GTIMER_SEC] = ARCH_TIMER_S_EL1_IRQ,
-            [GTIMER_HYPVIRT] = ARCH_TIMER_NS_EL2_VIRT_IRQ,
-            [GTIMER_S_EL2_PHYS] = ARCH_TIMER_S_EL2_IRQ,
-            [GTIMER_S_EL2_VIRT] = ARCH_TIMER_S_EL2_VIRT_IRQ,
-        };
-
-        for (int irq = 0; irq < ARRAY_SIZE(timer_irqs); irq++) {
-            qdev_connect_gpio_out(cpudev, irq,
-                                  qdev_get_gpio_in(s->gic,
-                                                   intidbase + timer_irqs[irq]));
-        }
-
-        qdev_connect_gpio_out_named(cpudev, "gicv3-maintenance-interrupt", 0,
-                                    qdev_get_gpio_in(s->gic,
-                                                     intidbase +
-                                                     ARCH_GIC_MAINT_IRQ));
-        qdev_connect_gpio_out_named(cpudev, "pmu-interrupt", 0,
-                                    qdev_get_gpio_in(s->gic,
-                                                     intidbase +
-                                                     VIRTUAL_PMU_IRQ));
-
-        sysbus_connect_irq(gicbusdev, n, qdev_get_gpio_in(cpudev, ARM_CPU_IRQ));
-        sysbus_connect_irq(gicbusdev, n + ms->smp.cpus,
-                           qdev_get_gpio_in(cpudev, ARM_CPU_FIQ));
-        sysbus_connect_irq(gicbusdev, n + 2 * ms->smp.cpus,
-                           qdev_get_gpio_in(cpudev, ARM_CPU_VIRQ));
-        sysbus_connect_irq(gicbusdev, n + 3 * ms->smp.cpus,
-                           qdev_get_gpio_in(cpudev, ARM_CPU_VFIQ));
-    }
-}
 
 static void rk3588_create_its(RK3588MachineState *s)
 {
@@ -4188,7 +4084,17 @@ static void rk3588_init(MachineState *machine)
         exit(EXIT_FAILURE);
     }
 
-    rk3588_create_cpus(s);
+    object_initialize_child(OBJECT(s), "soc", &s->soc, TYPE_RK3588_SOC);
+    qdev_prop_set_bit(DEVICE(&s->soc), "legacy-firmware", true);
+    qdev_prop_set_uint32(DEVICE(&s->soc), "num-cpus", machine->smp.cpus);
+    object_property_set_link(OBJECT(&s->soc), "memory",
+                             OBJECT(get_system_memory()), &error_abort);
+    qdev_realize(DEVICE(&s->soc), NULL, &error_fatal);
+    for (unsigned int i = 0; i < RK3588_MAX_CPUS; i++) {
+        s->cpu[i] = &s->soc.cpu[i];
+    }
+    s->gic = DEVICE(&s->soc.gic);
+
     rk3588_create_low_memory(s);
     rk3588_create_atf_ddr(s);
     rk3588_create_firmware_mmio(s);
@@ -4204,7 +4110,6 @@ static void rk3588_init(MachineState *machine)
     }
     rk3588_create_zvm_ram(s);
 
-    rk3588_create_gic(s);
     rk3588_create_its(s);
     rk3588_create_syscon_devices(s);
     rk3588_create_cru(s);

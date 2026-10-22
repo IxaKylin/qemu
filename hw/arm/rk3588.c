@@ -328,14 +328,20 @@ static bool rk3588_soc_create_gic(RK3588SoCState *s, Error **errp)
     SysBusDevice *gicsbd = SYS_BUS_DEVICE(gicdev);
     QList *redist_region_count = qlist_new();
 
-    qdev_prop_set_uint32(gicdev, "num-cpu", RK3588_NUM_CPUS);
-    qdev_prop_set_uint32(gicdev, "num-irq", RK3588_GIC_NUM_IRQS);
-    qlist_append_int(redist_region_count, RK3588_NUM_CPUS);
+    unsigned int num_irqs = s->legacy_firmware ?
+        RK3588_GIC_NUM_IRQS + GIC_INTERNAL : RK3588_GIC_NUM_IRQS;
+
+    qdev_prop_set_uint32(gicdev, "num-cpu", s->num_cpus);
+    qdev_prop_set_uint32(gicdev, "num-irq", num_irqs);
+    qlist_append_int(redist_region_count, s->num_cpus);
     qdev_prop_set_array(gicdev, "redist-region-count", redist_region_count);
     object_property_set_link(OBJECT(gicdev), "sysmem",
                              OBJECT(s->memory), &error_abort);
     /* The RK3588 GICv3 exposes LPIs so that its ITS instances can realize. */
     qdev_prop_set_bit(gicdev, "has-lpi", true);
+    if (s->legacy_firmware) {
+        qdev_prop_set_bit(gicdev, "has-security-extensions", true);
+    }
 
     if (!sysbus_realize(gicsbd, errp)) {
         return false;
@@ -348,9 +354,9 @@ static bool rk3588_soc_create_gic(RK3588SoCState *s, Error **errp)
         rk3588_memmap[RK3588_DEV_GIC_REDIST].base,
         sysbus_mmio_get_region(gicsbd, 1));
 
-    for (unsigned int i = 0; i < RK3588_NUM_CPUS; i++) {
+    for (unsigned int i = 0; i < s->num_cpus; i++) {
         DeviceState *cpudev = DEVICE(&s->cpu[i]);
-        int intidbase = RK3588_GIC_NUM_IRQS - GIC_INTERNAL + (i * GIC_INTERNAL);
+        int intidbase = num_irqs - GIC_INTERNAL + (i * GIC_INTERNAL);
         static const int timer_irqs[] = {
             [GTIMER_PHYS] = ARCH_TIMER_NS_EL1_IRQ,
             [GTIMER_VIRT] = ARCH_TIMER_VIRT_IRQ,
@@ -376,11 +382,11 @@ static bool rk3588_soc_create_gic(RK3588SoCState *s, Error **errp)
 
         sysbus_connect_irq(gicsbd, i,
                            qdev_get_gpio_in(cpudev, ARM_CPU_IRQ));
-        sysbus_connect_irq(gicsbd, i + RK3588_NUM_CPUS,
+        sysbus_connect_irq(gicsbd, i + s->num_cpus,
                            qdev_get_gpio_in(cpudev, ARM_CPU_FIQ));
-        sysbus_connect_irq(gicsbd, i + 2 * RK3588_NUM_CPUS,
+        sysbus_connect_irq(gicsbd, i + 2 * s->num_cpus,
                            qdev_get_gpio_in(cpudev, ARM_CPU_VIRQ));
-        sysbus_connect_irq(gicsbd, i + 3 * RK3588_NUM_CPUS,
+        sysbus_connect_irq(gicsbd, i + 3 * s->num_cpus,
                            qdev_get_gpio_in(cpudev, ARM_CPU_VFIQ));
     }
 
@@ -417,6 +423,9 @@ static bool rk3588_soc_create_its(RK3588SoCState *s, Error **errp)
 
 static bool rk3588_soc_create_cru(RK3588SoCState *s, Error **errp)
 {
+    s->cru = qdev_new("rockchip-cru");
+    object_property_add_child(OBJECT(s), "cru", OBJECT(s->cru));
+    object_unref(OBJECT(s->cru));
     SysBusDevice *cru = SYS_BUS_DEVICE(s->cru);
 
     if (!sysbus_realize(cru, errp)) {
@@ -432,6 +441,9 @@ static bool rk3588_soc_create_cru(RK3588SoCState *s, Error **errp)
 
 static bool rk3588_soc_create_otp(RK3588SoCState *s, Error **errp)
 {
+    s->otp = qdev_new("rockchip-otp");
+    object_property_add_child(OBJECT(s), "otp", OBJECT(s->otp));
+    object_unref(OBJECT(s->otp));
     SysBusDevice *otp = SYS_BUS_DEVICE(s->otp);
 
     if (!sysbus_realize(otp, errp)) {
@@ -447,6 +459,9 @@ static bool rk3588_soc_create_otp(RK3588SoCState *s, Error **errp)
 
 static bool rk3588_soc_create_sfc(RK3588SoCState *s, Error **errp)
 {
+    s->sfc = qdev_new("rockchip-sfc");
+    object_property_add_child(OBJECT(s), "sfc", OBJECT(s->sfc));
+    object_unref(OBJECT(s->sfc));
     SysBusDevice *sfc = SYS_BUS_DEVICE(s->sfc);
 
     object_property_set_link(OBJECT(s->sfc), "dma-memory",
@@ -466,6 +481,9 @@ static bool rk3588_soc_create_sfc(RK3588SoCState *s, Error **errp)
 
 static bool rk3588_soc_create_sdmmc(RK3588SoCState *s, Error **errp)
 {
+    s->sdmmc = qdev_new(TYPE_DW_MMC);
+    object_property_add_child(OBJECT(s), "sdmmc", OBJECT(s->sdmmc));
+    object_unref(OBJECT(s->sdmmc));
     SysBusDevice *sbd = SYS_BUS_DEVICE(s->sdmmc);
     DriveInfo *di;
     BusState *bus;
@@ -561,6 +579,10 @@ static bool rk3588_soc_create_usb(RK3588SoCState *s, Error **errp)
  */
 static bool rk3588_soc_create_pcie(RK3588SoCState *s, Error **errp)
 {
+    s->pcie2x1l2 = qdev_new(TYPE_ROCKCHIP_PCIE_HOST);
+    object_property_add_child(OBJECT(s), "pcie2x1l2",
+                              OBJECT(s->pcie2x1l2));
+    object_unref(OBJECT(s->pcie2x1l2));
     DeviceState *host = s->pcie2x1l2;
     SysBusDevice *host_sbd = SYS_BUS_DEVICE(host);
     PCIBus *secbus;
@@ -633,13 +655,31 @@ static void rk3588_soc_realize(DeviceState *dev, Error **errp)
         return;
     }
 
-    for (unsigned int c = 0; c < RK3588_CLUSTER_COUNT; c++) {
+    unsigned int n = 0;
+
+    for (unsigned int c = 0;
+         c < RK3588_CLUSTER_COUNT && n < s->num_cpus; c++) {
+        g_autofree char *cluster_name = g_strdup_printf("cluster%u", c);
+
+        object_initialize_child(OBJECT(s), cluster_name, &s->cluster[c],
+                                TYPE_CPU_CLUSTER);
+        qdev_prop_set_uint32(DEVICE(&s->cluster[c]), "cluster-id", c);
+
+        for (unsigned int i = 0; i < rk3588_cpu_clusters[c].num_cpus &&
+                                n < s->num_cpus; i++, n++) {
+            g_autofree char *name = g_strdup_printf("cpu%u", n);
+
+            object_initialize_child(OBJECT(&s->cluster[c]), name,
+                                    &s->cpu[n],
+                                    rk3588_cpu_clusters[c].cpu_type);
+        }
+
         if (!qdev_realize(DEVICE(&s->cluster[c]), NULL, errp)) {
             return;
         }
     }
 
-    for (unsigned int n = 0; n < RK3588_NUM_CPUS; n++) {
+    for (n = 0; n < s->num_cpus; n++) {
         ARMCPU *cpu = &s->cpu[n];
         uint64_t mpidr = arm_build_mp_affinity(n, RK3588_MPIDR_AFF0_PER_AFF1);
 
@@ -654,14 +694,45 @@ static void rk3588_soc_realize(DeviceState *dev, Error **errp)
             object_property_set_bool(OBJECT(cpu), "start-powered-off", true,
                                      &error_abort);
         }
+        if (s->legacy_firmware) {
+            if (object_property_find(OBJECT(cpu), "has_el2")) {
+                object_property_set_bool(OBJECT(cpu), "has_el2", true,
+                                         &error_abort);
+            }
+            if (object_property_find(OBJECT(cpu), "has_el3")) {
+                object_property_set_bool(OBJECT(cpu), "has_el3", true,
+                                         &error_abort);
+            }
+            if (object_property_find(OBJECT(cpu), "reset-cbar")) {
+                object_property_set_int(OBJECT(cpu), "reset-cbar",
+                                        rk3588_memmap[RK3588_DEV_GIC_DIST].base,
+                                        &error_abort);
+            }
+        }
 
         if (!qdev_realize(DEVICE(cpu), NULL, errp)) {
             return;
         }
     }
 
-    if (!rk3588_soc_create_gic(s, errp) ||
-        !rk3588_soc_create_its(s, errp) ||
+    if (!rk3588_soc_create_gic(s, errp)) {
+        return;
+    }
+    if (s->legacy_firmware) {
+        for (unsigned int i = RK3588_FIRST_UART; i < RK3588_NUM_UARTS; i++) {
+            qdev_prop_set_uint32(DEVICE(&s->uart[i]), "baudbase",
+                                 RK3588_UART_BAUD_BASE);
+            if (!sysbus_realize(SYS_BUS_DEVICE(&s->uart[i]), errp)) {
+                return;
+            }
+        }
+        if (!sysbus_realize(SYS_BUS_DEVICE(s->usb3otg0), errp)) {
+            return;
+        }
+        return;
+    }
+
+    if (!rk3588_soc_create_its(s, errp) ||
         !rk3588_soc_create_cru(s, errp) ||
         !rk3588_soc_create_otp(s, errp) ||
         !rk3588_soc_create_sfc(s, errp) ||
@@ -678,24 +749,6 @@ static void rk3588_soc_realize(DeviceState *dev, Error **errp)
 static void rk3588_soc_instance_init(Object *obj)
 {
     RK3588SoCState *s = RK3588_SOC(obj);
-    unsigned int n = 0;
-
-    for (unsigned int c = 0; c < RK3588_CLUSTER_COUNT; c++) {
-        g_autofree char *cluster_name = g_strdup_printf("cluster%u", c);
-
-        object_initialize_child(obj, cluster_name, &s->cluster[c],
-                                TYPE_CPU_CLUSTER);
-        qdev_prop_set_uint32(DEVICE(&s->cluster[c]), "cluster-id", c);
-
-        for (unsigned int i = 0; i < rk3588_cpu_clusters[c].num_cpus; i++) {
-            g_autofree char *name = g_strdup_printf("cpu%u", n);
-
-            object_initialize_child(OBJECT(&s->cluster[c]), name,
-                                    &s->cpu[n],
-                                    rk3588_cpu_clusters[c].cpu_type);
-            n++;
-        }
-    }
 
     object_initialize_child(obj, "gic", &s->gic, TYPE_ARM_GICV3);
 
@@ -714,35 +767,24 @@ static void rk3588_soc_instance_init(Object *obj)
                               OBJECT(s->usb3otg0), "chardev");
     object_unref(OBJECT(s->usb3otg0));
 
-    s->pcie2x1l2 = qdev_new(TYPE_ROCKCHIP_PCIE_HOST);
-    object_property_add_child(obj, "pcie2x1l2", OBJECT(s->pcie2x1l2));
-    object_unref(OBJECT(s->pcie2x1l2));
-
-    s->cru = qdev_new("rockchip-cru");
-    object_property_add_child(obj, "cru", OBJECT(s->cru));
-    object_unref(OBJECT(s->cru));
-
-    s->otp = qdev_new("rockchip-otp");
-    object_property_add_child(obj, "otp", OBJECT(s->otp));
-    object_unref(OBJECT(s->otp));
-
-    s->sfc = qdev_new("rockchip-sfc");
-    object_property_add_child(obj, "sfc", OBJECT(s->sfc));
-    object_unref(OBJECT(s->sfc));
-
-    s->sdmmc = qdev_new(TYPE_DW_MMC);
-    object_property_add_child(obj, "sdmmc", OBJECT(s->sdmmc));
-    object_unref(OBJECT(s->sdmmc));
 }
 
 static const Property rk3588_soc_properties[] = {
     DEFINE_PROP_LINK("memory", RK3588SoCState, memory, TYPE_MEMORY_REGION,
                      MemoryRegion *),
+    DEFINE_PROP_BOOL("legacy-firmware", RK3588SoCState, legacy_firmware,
+                     false),
+    DEFINE_PROP_UINT32("num-cpus", RK3588SoCState, num_cpus,
+                       RK3588_NUM_CPUS),
 };
 
 static const VMStateDescription vmstate_rk3588_soc = {
     .name = TYPE_RK3588_SOC,
-    .unmigratable = true,
+    .version_id = 1,
+    .minimum_version_id = 1,
+    .fields = (const VMStateField[]) {
+        VMSTATE_END_OF_LIST()
+    },
 };
 
 static void rk3588_soc_class_init(ObjectClass *oc, const void *data)

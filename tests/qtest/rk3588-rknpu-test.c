@@ -191,7 +191,7 @@
 #define RK3588_VENDOR_SRST_H_RKNN0 488
 #define RK3588_VENDOR_SRST_H_RKNN1 434
 #define RK3588_VENDOR_SRST_H_RKNN2 450
-#define RK3588_GIC_QOM "/machine/gic"
+#define RK3588_GIC_QOM "/machine/soc/gic"
 
 #define RKNN_PC_VERSION 0x0000
 #define RKNN_PC_VERSION_NUM 0x0004
