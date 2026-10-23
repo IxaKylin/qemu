@@ -338,8 +338,6 @@ struct RK3588MachineState {
     DeviceState *rknn_mmu[3];
     DeviceState *rknn_irq_or[3];
     DeviceState *gpio[5];
-    DeviceState *crypto;
-    DeviceState *secure_otp;
     DeviceState *tsadc;
     DeviceState *atf_ddr;
     RK3588DDRState *ddr;
@@ -3878,21 +3876,6 @@ static void rk3588_create_syscon_devices(RK3588MachineState *s)
     rk3588_create_syscon(s, "pipe-phy-grf2", RK3588_PIPE_PHY_GRF2);
 }
 
-static void rk3588_create_crypto(RK3588MachineState *s)
-{
-    const RK3588FirmwareProfile *profile = s->board->firmware_profile;
-    SysBusDevice *sbd;
-
-    if (!profile || !profile->crypto_v2_sha256) {
-        return;
-    }
-
-    s->crypto = qdev_new(TYPE_ROCKCHIP_CRYPTO_V2);
-    object_property_add_child(OBJECT(s), "crypto", OBJECT(s->crypto));
-    sbd = SYS_BUS_DEVICE(s->crypto);
-    sysbus_realize(sbd, &error_fatal);
-    sysbus_mmio_map(sbd, 0, rk3588_memmap[RK3588_CRYPTO].base);
-}
 
 /*
  * TSADC thermal sensor: fixed room-temperature ADC codes so the Linux
@@ -3994,23 +3977,6 @@ static void rk3588_create_dmac1(RK3588MachineState *s)
     object_unref(OBJECT(dev));
 }
 
-static void rk3588_create_secure_otp(RK3588MachineState *s)
-{
-    const RK3588FirmwareProfile *profile = s->board->firmware_profile;
-    SysBusDevice *sbd;
-
-    if (!profile || !profile->unfused_secure_otp) {
-        return;
-    }
-
-    s->secure_otp = qdev_new(TYPE_RK3588_SECURE_OTP);
-    object_property_add_child(OBJECT(s), "secure-otp",
-                              OBJECT(s->secure_otp));
-    sbd = SYS_BUS_DEVICE(s->secure_otp);
-    sysbus_realize(sbd, &error_fatal);
-    sysbus_mmio_map(sbd, 0, RK3588_SECURE_OTP_BASE);
-    object_unref(OBJECT(s->secure_otp));
-}
 
 static void rk3588_init(MachineState *machine)
 {
@@ -4054,6 +4020,12 @@ static void rk3588_init(MachineState *machine)
     qdev_prop_set_uint32(DEVICE(&s->soc), "num-cpus", machine->smp.cpus);
     qdev_prop_set_uint32(DEVICE(&s->soc), "gmac-mask",
                          board->gmac_mask);
+    if (board->firmware_profile) {
+        qdev_prop_set_bit(DEVICE(&s->soc), "secure-otp-unfused",
+                          board->firmware_profile->unfused_secure_otp);
+        qdev_prop_set_bit(DEVICE(&s->soc), "crypto-v2-sha256",
+                          board->firmware_profile->crypto_v2_sha256);
+    }
     object_property_set_link(OBJECT(&s->soc), "memory",
                              OBJECT(get_system_memory()), &error_abort);
     qdev_realize(DEVICE(&s->soc), NULL, &error_fatal);
@@ -4085,8 +4057,6 @@ static void rk3588_init(MachineState *machine)
     rk3588_create_usb3_device(s);
     rk3588_create_usb2_host(s);
     rk3588_create_scmi(s);
-    rk3588_create_secure_otp(s);
-    rk3588_create_crypto(s);
     rk3588_create_tsadc(s);
     rk3588_create_uarts(s);
     rk3588_create_sdhci(s);

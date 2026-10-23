@@ -22,7 +22,9 @@
 #include "hw/cpu/cluster.h"
 #include "hw/misc/unimp.h"
 #include "hw/core/register.h"
+#include "hw/misc/rockchip_crypto_v2.h"
 #include "hw/net/dwmac4.h"
+#include "hw/nvram/rk3588_secure_otp.h"
 #include "hw/net/rtl8125.h"
 #include "hw/pci-host/rockchip_pcie.h"
 #include "hw/sd/dw_mmc.h"
@@ -53,6 +55,8 @@
 #define RK3588_GMAC1_BASE            0xfe1c0000
 #define RK3588_GMAC0_SPI             227
 #define RK3588_GMAC1_SPI             234
+#define RK3588_SECURE_OTP_BASE       0xfe3a0000
+#define RK3588_CRYPTO_BASE           0xfe370000
 
 /* UART0 in the PMU power domain is reserved; UART1-UART9 are modeled. */
 #define RK3588_FIRST_UART            (1)
@@ -654,6 +658,43 @@ static bool rk3588_soc_create_pcie(RK3588SoCState *s, Error **errp)
     return true;
 }
 
+static bool rk3588_soc_create_secure_otp(RK3588SoCState *s, Error **errp)
+{
+    SysBusDevice *sbd;
+
+    if (!s->secure_otp_unfused) {
+        return true;
+    }
+
+    s->secure_otp = qdev_new(TYPE_RK3588_SECURE_OTP);
+    object_property_add_child(OBJECT(s), "secure-otp",
+                              OBJECT(s->secure_otp));
+    sbd = SYS_BUS_DEVICE(s->secure_otp);
+    if (!sysbus_realize(sbd, errp)) {
+        return false;
+    }
+    sysbus_mmio_map(sbd, 0, RK3588_SECURE_OTP_BASE);
+    return true;
+}
+
+static bool rk3588_soc_create_crypto(RK3588SoCState *s, Error **errp)
+{
+    SysBusDevice *sbd;
+
+    if (!s->crypto_v2_sha256) {
+        return true;
+    }
+
+    s->crypto = qdev_new(TYPE_ROCKCHIP_CRYPTO_V2);
+    object_property_add_child(OBJECT(s), "crypto", OBJECT(s->crypto));
+    sbd = SYS_BUS_DEVICE(s->crypto);
+    if (!sysbus_realize(sbd, errp)) {
+        return false;
+    }
+    sysbus_mmio_map(sbd, 0, RK3588_CRYPTO_BASE);
+    return true;
+}
+
 static bool rk3588_soc_create_gmac(RK3588SoCState *s, Error **errp)
 {
     static const struct {
@@ -771,7 +812,9 @@ static void rk3588_soc_realize(DeviceState *dev, Error **errp)
         if (!sysbus_realize(SYS_BUS_DEVICE(s->usb3otg0), errp)) {
             return;
         }
-        if (!rk3588_soc_create_gmac(s, errp)) {
+        if (!rk3588_soc_create_secure_otp(s, errp) ||
+            !rk3588_soc_create_crypto(s, errp) ||
+            !rk3588_soc_create_gmac(s, errp)) {
             return;
         }
         return;
@@ -822,6 +865,10 @@ static const Property rk3588_soc_properties[] = {
     DEFINE_PROP_UINT32("num-cpus", RK3588SoCState, num_cpus,
                        RK3588_NUM_CPUS),
     DEFINE_PROP_UINT32("gmac-mask", RK3588SoCState, gmac_mask, 0),
+    DEFINE_PROP_BOOL("secure-otp-unfused", RK3588SoCState,
+                     secure_otp_unfused, false),
+    DEFINE_PROP_BOOL("crypto-v2-sha256", RK3588SoCState,
+                     crypto_v2_sha256, false),
 };
 
 static const VMStateDescription vmstate_rk3588_soc = {
