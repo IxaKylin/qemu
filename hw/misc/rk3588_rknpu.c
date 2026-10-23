@@ -3400,8 +3400,13 @@ static RockchipRKNNExecutionMode rockchip_rknn_execution_mode(
         *reason = "dpu-int8";
         return ROCKCHIP_RKNN_EXECUTION_DPU_INT8;
     }
-    if (task->dpu.output_precision != 4 || task->core.quantify) {
+    if (task->dpu.output_precision != 4) {
         *reason = "dpu-output-mode";
+        return ROCKCHIP_RKNN_EXECUTION_UNSUPPORTED;
+    }
+    if (!rockchip_rknn_strided_output_layout_valid(
+            &task->dpu.output, sizeof(uint32_t))) {
+        *reason = "dpu-int32-output-layout";
         return ROCKCHIP_RKNN_EXECUTION_UNSUPPORTED;
     }
     if (dpu_rdma_enabled) {
