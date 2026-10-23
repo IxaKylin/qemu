@@ -1168,7 +1168,7 @@ static void test_rock_5b_plus_i2c6_device(void)
                     RK3X_I2C_CON_VERSION, ==, RK3X_I2C_CON_VERSION);
 
     resp = qtest_qmp(qts, "{'execute': 'qom-list',"
-                     " 'arguments': {'path': '/machine'}}");
+                     " 'arguments': {'path': '/machine/soc'}}");
     g_assert_true(resp);
     children = qdict_get_qlist(resp, "return");
     g_assert_true(children);

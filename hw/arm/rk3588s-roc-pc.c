@@ -325,9 +325,6 @@ struct RK3588MachineState {
     DeviceState *sdhci;
     DeviceState *sdmmc;     /* dw_mmc - SD card controller */
     DeviceState *sfc;       /* rockchip-sfc - SPI NOR flash controller */
-    DeviceState *spi2;      /* rockchip-spi - SPI2 (RK806 PMIC) */
-    DeviceState *i2c6;      /* rk3x-i2c - I2C6 (hym8563 RTC) */
-    DeviceState *dmac1;     /* rk3588-pl330 - DMAC1 stub */
     DeviceState *scmi;      /* SCMI clock agent (shmem + SMC responder) */
     DeviceState *pcie3x4;
     DeviceState *pcie3x2;
@@ -337,8 +334,6 @@ struct RK3588MachineState {
     DeviceState *rknn[3];
     DeviceState *rknn_mmu[3];
     DeviceState *rknn_irq_or[3];
-    DeviceState *gpio[5];
-    DeviceState *tsadc;
     DeviceState *atf_ddr;
     RK3588DDRState *ddr;
     RK3588DWC3UDCState *dwc3_udc;
@@ -1005,7 +1000,7 @@ static void rk3588_fdt_add_gpio_nodes(void *fdt, uint32_t clk_phandle)
     qemu_fdt_setprop_cell(fdt, pinctrl, "#size-cells", 2);
     qemu_fdt_setprop_cell(fdt, pinctrl, "phandle", pinctrl_phandle);
 
-    for (unsigned int i = 0; i < ARRAY_SIZE(((RK3588MachineState *)0)->gpio);
+    for (unsigned int i = 0; i < 5;
          i++) {
         int idx = RK3588_GPIO0 + i;
         g_autofree char *node = g_strdup_printf("%s/gpio%u@%" PRIx64,
@@ -3252,22 +3247,6 @@ static void rk3588_create_sdhci(RK3588MachineState *s)
     rk3588_attach_emmc_card(s);
 }
 
-static void rk3588_create_gpio(RK3588MachineState *s)
-{
-    for (unsigned int i = 0; i < ARRAY_SIZE(s->gpio); i++) {
-        int idx = RK3588_GPIO0 + i;
-        g_autofree char *name = g_strdup_printf("gpio%u", i);
-        SysBusDevice *sbd;
-
-        s->gpio[i] = qdev_new(TYPE_ROCKCHIP_GPIO);
-        object_property_add_child(OBJECT(s), name, OBJECT(s->gpio[i]));
-        sbd = SYS_BUS_DEVICE(s->gpio[i]);
-        sysbus_realize(sbd, &error_fatal);
-        sysbus_mmio_map(sbd, 0, rk3588_memmap[idx].base);
-        sysbus_connect_irq(sbd, 0,
-                           qdev_get_gpio_in(s->gic, RK3588_GPIO0_SPI + i));
-    }
-}
 
 
 enum {
@@ -3540,16 +3519,6 @@ static void rk3588_create_cru(RK3588MachineState *s)
     sysbus_mmio_map(sbd, 0, rk3588_memmap[RK3588_CRU_MEM].base);
 }
 
-static void rk3588_create_stimer(RK3588MachineState *s)
-{
-    DeviceState *dev = qdev_new(TYPE_ROCKCHIP_STIMER);
-    SysBusDevice *sbd;
-
-    object_property_add_child(OBJECT(s), "stimer", OBJECT(dev));
-    sbd = SYS_BUS_DEVICE(dev);
-    sysbus_realize(sbd, &error_fatal);
-    sysbus_mmio_map(sbd, 0, rk3588_memmap[RK3588_STIMER].base);
-}
 
 static void rk3588_create_ddr(RK3588MachineState *s)
 {
@@ -3882,18 +3851,6 @@ static void rk3588_create_syscon_devices(RK3588MachineState *s)
  * thermal framework boots normally (the critical-trip shutdown path is
  * only reachable when the sensor reports an out-of-range code).
  */
-static void rk3588_create_tsadc(RK3588MachineState *s)
-{
-    DeviceState *dev = qdev_new(TYPE_RK3588_TSADC);
-    SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
-
-    object_property_add_child(OBJECT(s), "tsadc", OBJECT(dev));
-    sysbus_realize(sbd, &error_fatal);
-    sysbus_mmio_map(sbd, 0, rk3588_memmap[RK3588_TSADC_MMIO].base);
-    sysbus_connect_irq(sbd, 0, qdev_get_gpio_in(s->gic, RK3588_TSADC_SPI));
-    s->tsadc = dev;
-    object_unref(OBJECT(dev));
-}
 
 /*
  * SPI2 with the RK806 PMIC on chip-select 0.  The PMIC supplies the
@@ -3901,81 +3858,14 @@ static void rk3588_create_tsadc(RK3588MachineState *s)
  * exposes them enabled at their nominal voltages so the MMC and PCIe
  * driver probe chains do not defer forever.
  */
-static void rk3588_create_spi2(RK3588MachineState *s)
-{
-    DeviceState *dev = qdev_new(TYPE_ROCKCHIP_SPI);
-    SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
-    DeviceState *pmic;
 
-    object_property_add_child(OBJECT(s), "spi2", OBJECT(dev));
-    sysbus_realize(sbd, &error_fatal);
-    sysbus_mmio_map(sbd, 0, rk3588_memmap[RK3588_SPI2].base);
-    sysbus_connect_irq(sbd, 0, qdev_get_gpio_in(s->gic, RK3588_SPI2_SPI));
-
-    pmic = qdev_new(TYPE_RK806);
-    qdev_realize_and_unref(pmic, BUS(ROCKCHIP_SPI(dev)->spi), &error_fatal);
-
-    s->spi2 = dev;
-    object_unref(OBJECT(dev));
-}
-
-static void rk3588_create_i2c6(RK3588MachineState *s)
-{
-    DeviceState *dev = qdev_new(TYPE_RK3X_I2C);
-    SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
-    DeviceState *rtc;
-    I2CBus *bus;
-
-    object_property_add_child(OBJECT(s), "i2c6", OBJECT(dev));
-    sysbus_realize(sbd, &error_fatal);
-    sysbus_mmio_map(sbd, 0, rk3588_memmap[RK3588_I2C6].base);
-    sysbus_connect_irq(sbd, 0, qdev_get_gpio_in(s->gic, RK3588_I2C6_SPI));
-
-    bus = I2C_BUS(qdev_get_child_bus(dev, "i2c-bus"));
-    rtc = DEVICE(i2c_slave_create_simple(bus, TYPE_HYM8563, 0x51));
-    /*
-     * The RTC INT output is open-drain active-low, wired to GPIO0
-     * bank B pin 0 (RK_PB0).  The driver keeps the alarm and timer
-     * interrupts disabled, so the line idles high.
-     */
-    qdev_connect_gpio_out_named(rtc, "irq", 0,
-                                qdev_get_gpio_in(s->gpio[0], 8));
-
-    s->i2c6 = dev;
-    object_unref(OBJECT(dev));
-}
 
 /* TRNGv1: seeds the kernel CRNG so getrandom() does not block. */
-static void rk3588_create_rng(RK3588MachineState *s)
-{
-    DeviceState *dev = qdev_new(TYPE_RK3588_RNG);
-    SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
-
-    object_property_add_child(OBJECT(s), "rng", OBJECT(dev));
-    sysbus_realize(sbd, &error_fatal);
-    sysbus_mmio_map(sbd, 0, rk3588_memmap[RK3588_RNG_MMIO].base);
-    sysbus_connect_irq(sbd, 0, qdev_get_gpio_in(s->gic, RK3588_RNG_SPI));
-    object_unref(OBJECT(dev));
-}
 
 /*
  * DMAC1 stub: lets the kernel's pl330 driver bind and register the DT
  * DMA provider so spi-rockchip's dma_request_chan() does not defer.
  */
-static void rk3588_create_dmac1(RK3588MachineState *s)
-{
-    DeviceState *dev = qdev_new(TYPE_RK3588_PL330);
-    SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
-
-    object_property_add_child(OBJECT(s), "dmac1", OBJECT(dev));
-    sysbus_realize(sbd, &error_fatal);
-    sysbus_mmio_map(sbd, 0, rk3588_memmap[RK3588_DMAC1].base);
-    sysbus_connect_irq(sbd, 0, qdev_get_gpio_in(s->gic, RK3588_DMAC1_SPI));
-    sysbus_connect_irq(sbd, 1,
-                       qdev_get_gpio_in(s->gic, RK3588_DMAC1_SPI + 1));
-    s->dmac1 = dev;
-    object_unref(OBJECT(dev));
-}
 
 
 static void rk3588_init(MachineState *machine)
@@ -4052,21 +3942,14 @@ static void rk3588_init(MachineState *machine)
     rk3588_create_its(s);
     rk3588_create_syscon_devices(s);
     rk3588_create_cru(s);
-    rk3588_create_stimer(s);
     rk3588_create_ddr(s);
     rk3588_create_usb3_device(s);
     rk3588_create_usb2_host(s);
     rk3588_create_scmi(s);
-    rk3588_create_tsadc(s);
     rk3588_create_uarts(s);
     rk3588_create_sdhci(s);
     rk3588_create_sdmmc(s);
     rk3588_create_sfc(s);
-    rk3588_create_gpio(s);
-    rk3588_create_dmac1(s);
-    rk3588_create_spi2(s);
-    rk3588_create_i2c6(s);
-    rk3588_create_rng(s);
     rk3588_create_rknpu(s);
     rk3588_create_pcie(s);
     rk3588_create_pcie2x1(s);

@@ -22,12 +22,22 @@
 #include "hw/cpu/cluster.h"
 #include "hw/misc/unimp.h"
 #include "hw/core/register.h"
+#include "hw/gpio/rockchip_gpio.h"
+#include "hw/i2c/i2c.h"
+#include "hw/i2c/rk3x_i2c.h"
 #include "hw/misc/rockchip_crypto_v2.h"
+#include "hw/misc/rk3588_pl330.h"
+#include "hw/misc/rk3588_rng.h"
+#include "hw/misc/rk3588_tsadc.h"
 #include "hw/net/dwmac4.h"
 #include "hw/nvram/rk3588_secure_otp.h"
 #include "hw/net/rtl8125.h"
 #include "hw/pci-host/rockchip_pcie.h"
+#include "hw/rtc/hym8563.h"
 #include "hw/sd/dw_mmc.h"
+#include "hw/ssi/rk806.h"
+#include "hw/ssi/rockchip_spi.h"
+#include "hw/timer/rockchip_stimer.h"
 #include "hw/usb/dwc3-udc.h"
 #include "migration/vmstate.h"
 #include "net/net.h"
@@ -57,6 +67,18 @@
 #define RK3588_GMAC1_SPI             234
 #define RK3588_SECURE_OTP_BASE       0xfe3a0000
 #define RK3588_CRYPTO_BASE           0xfe370000
+#define RK3588_TSADC_BASE            0xfec00000
+#define RK3588_TSADC_SPI             397
+#define RK3588_SPI2_BASE             0xfeb20000
+#define RK3588_SPI2_SPI              328
+#define RK3588_RNG_BASE              0xfe378000
+#define RK3588_RNG_SPI               400
+#define RK3588_DMAC1_BASE            0xfea10000
+#define RK3588_DMAC1_SPI             86
+#define RK3588_STIMER_BASE           0xfd8c8000
+#define RK3588_GPIO0_SPI             277
+#define RK3588_I2C6_BASE             0xfec80000
+#define RK3588_I2C6_SPI              323
 
 /* UART0 in the PMU power domain is reserved; UART1-UART9 are modeled. */
 #define RK3588_FIRST_UART            (1)
@@ -695,6 +717,137 @@ static bool rk3588_soc_create_crypto(RK3588SoCState *s, Error **errp)
     return true;
 }
 
+static bool rk3588_soc_create_tsadc(RK3588SoCState *s, Error **errp)
+{
+    SysBusDevice *sbd;
+
+    s->tsadc = qdev_new(TYPE_RK3588_TSADC);
+    object_property_add_child(OBJECT(s), "tsadc", OBJECT(s->tsadc));
+    sbd = SYS_BUS_DEVICE(s->tsadc);
+    if (!sysbus_realize(sbd, errp)) {
+        return false;
+    }
+    sysbus_mmio_map(sbd, 0, RK3588_TSADC_BASE);
+    sysbus_connect_irq(sbd, 0,
+                       qdev_get_gpio_in(DEVICE(&s->gic), RK3588_TSADC_SPI));
+    return true;
+}
+
+static bool rk3588_soc_create_spi2(RK3588SoCState *s, Error **errp)
+{
+    DeviceState *pmic;
+    SysBusDevice *sbd;
+
+    s->spi2 = qdev_new(TYPE_ROCKCHIP_SPI);
+    object_property_add_child(OBJECT(s), "spi2", OBJECT(s->spi2));
+    sbd = SYS_BUS_DEVICE(s->spi2);
+    if (!sysbus_realize(sbd, errp)) {
+        return false;
+    }
+    sysbus_mmio_map(sbd, 0, RK3588_SPI2_BASE);
+    sysbus_connect_irq(sbd, 0,
+                       qdev_get_gpio_in(DEVICE(&s->gic), RK3588_SPI2_SPI));
+
+    pmic = qdev_new(TYPE_RK806);
+    return qdev_realize_and_unref(pmic, BUS(ROCKCHIP_SPI(s->spi2)->spi), errp);
+}
+
+static bool rk3588_soc_create_rng(RK3588SoCState *s, Error **errp)
+{
+    DeviceState *dev = qdev_new(TYPE_RK3588_RNG);
+    SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
+
+    object_property_add_child(OBJECT(s), "rng", OBJECT(dev));
+    if (!sysbus_realize(sbd, errp)) {
+        return false;
+    }
+    sysbus_mmio_map(sbd, 0, RK3588_RNG_BASE);
+    sysbus_connect_irq(sbd, 0,
+                       qdev_get_gpio_in(DEVICE(&s->gic), RK3588_RNG_SPI));
+    object_unref(OBJECT(dev));
+    return true;
+}
+
+static bool rk3588_soc_create_dmac1(RK3588SoCState *s, Error **errp)
+{
+    SysBusDevice *sbd;
+
+    s->dmac1 = qdev_new(TYPE_RK3588_PL330);
+    object_property_add_child(OBJECT(s), "dmac1", OBJECT(s->dmac1));
+    sbd = SYS_BUS_DEVICE(s->dmac1);
+    if (!sysbus_realize(sbd, errp)) {
+        return false;
+    }
+    sysbus_mmio_map(sbd, 0, RK3588_DMAC1_BASE);
+    sysbus_connect_irq(sbd, 0,
+                       qdev_get_gpio_in(DEVICE(&s->gic), RK3588_DMAC1_SPI));
+    sysbus_connect_irq(sbd, 1,
+                       qdev_get_gpio_in(DEVICE(&s->gic),
+                                        RK3588_DMAC1_SPI + 1));
+    return true;
+}
+
+static bool rk3588_soc_create_stimer(RK3588SoCState *s, Error **errp)
+{
+    DeviceState *dev = qdev_new(TYPE_ROCKCHIP_STIMER);
+    SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
+
+    object_property_add_child(OBJECT(s), "stimer", OBJECT(dev));
+    if (!sysbus_realize(sbd, errp)) {
+        return false;
+    }
+    sysbus_mmio_map(sbd, 0, RK3588_STIMER_BASE);
+    object_unref(OBJECT(dev));
+    return true;
+}
+
+static bool rk3588_soc_create_gpio(RK3588SoCState *s, Error **errp)
+{
+    static const hwaddr gpio_bases[] = {
+        0xfd8a0000, 0xfec20000, 0xfec30000, 0xfec40000, 0xfec50000,
+    };
+
+    for (unsigned int i = 0; i < ARRAY_SIZE(gpio_bases); i++) {
+        g_autofree char *name = g_strdup_printf("gpio%u", i);
+        SysBusDevice *sbd;
+
+        s->gpio[i] = qdev_new(TYPE_ROCKCHIP_GPIO);
+        object_property_add_child(OBJECT(s), name, OBJECT(s->gpio[i]));
+        sbd = SYS_BUS_DEVICE(s->gpio[i]);
+        if (!sysbus_realize(sbd, errp)) {
+            return false;
+        }
+        sysbus_mmio_map(sbd, 0, gpio_bases[i]);
+        sysbus_connect_irq(sbd, 0,
+                           qdev_get_gpio_in(DEVICE(&s->gic),
+                                            RK3588_GPIO0_SPI + i));
+    }
+    return true;
+}
+
+static bool rk3588_soc_create_i2c6(RK3588SoCState *s, Error **errp)
+{
+    SysBusDevice *sbd;
+    DeviceState *rtc;
+    I2CBus *bus;
+
+    s->i2c6 = qdev_new(TYPE_RK3X_I2C);
+    object_property_add_child(OBJECT(s), "i2c6", OBJECT(s->i2c6));
+    sbd = SYS_BUS_DEVICE(s->i2c6);
+    if (!sysbus_realize(sbd, errp)) {
+        return false;
+    }
+    sysbus_mmio_map(sbd, 0, RK3588_I2C6_BASE);
+    sysbus_connect_irq(sbd, 0,
+                       qdev_get_gpio_in(DEVICE(&s->gic), RK3588_I2C6_SPI));
+
+    bus = I2C_BUS(qdev_get_child_bus(s->i2c6, "i2c-bus"));
+    rtc = DEVICE(i2c_slave_create_simple(bus, TYPE_HYM8563, 0x51));
+    qdev_connect_gpio_out_named(rtc, "irq", 0,
+                                qdev_get_gpio_in(s->gpio[0], 8));
+    return true;
+}
+
 static bool rk3588_soc_create_gmac(RK3588SoCState *s, Error **errp)
 {
     static const struct {
@@ -814,6 +967,13 @@ static void rk3588_soc_realize(DeviceState *dev, Error **errp)
         }
         if (!rk3588_soc_create_secure_otp(s, errp) ||
             !rk3588_soc_create_crypto(s, errp) ||
+            !rk3588_soc_create_tsadc(s, errp) ||
+            !rk3588_soc_create_spi2(s, errp) ||
+            !rk3588_soc_create_rng(s, errp) ||
+            !rk3588_soc_create_dmac1(s, errp) ||
+            !rk3588_soc_create_stimer(s, errp) ||
+            !rk3588_soc_create_gpio(s, errp) ||
+            !rk3588_soc_create_i2c6(s, errp) ||
             !rk3588_soc_create_gmac(s, errp)) {
             return;
         }

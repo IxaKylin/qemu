@@ -84,6 +84,11 @@ struct RK3588SoCState {
     DeviceState *gmac[2];
     DeviceState *secure_otp;
     DeviceState *crypto;
+    DeviceState *tsadc;
+    DeviceState *spi2;
+    DeviceState *dmac1;
+    DeviceState *gpio[5];
+    DeviceState *i2c6;
     MemoryRegion *memory;
     bool legacy_firmware;
     bool secure_otp_unfused;

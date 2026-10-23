@@ -197,7 +197,7 @@
 #define DW_UART_USR_BUSY 0x1
 #define DW_UART_USR_TFNF 0x2
 #define DW_UART_USR_TFE 0x4
-#define RK3588_GPIO0_QOM "/machine/gpio0"
+#define RK3588_GPIO0_QOM "/machine/soc/gpio0"
 #define GPIO_PIN0 0x00000001U
 #define GPIO_PIN0_WE 0x00010000U
 #define GPIO_PIN0_SET (GPIO_PIN0_WE | GPIO_PIN0)
