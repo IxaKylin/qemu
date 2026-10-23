@@ -601,8 +601,16 @@ static const MemMapEntry rk3588_memmap[] = {
 
 static hwaddr rk3588_ram_base(const RK3588MachineState *s)
 {
-    return s->direct_ram_layout ? RK3588_DIRECT_RAM_BASE :
-                           rk3588_memmap[RK3588_RAM].base;
+    if (s->direct_ram_layout) {
+        /*
+         * Direct Linux boot places DRAM at 0x10000000, while the board
+         * firmware image loads U-Boot at 0x00200000 and expects the low
+         * DRAM mapping there.
+         */
+        return (MACHINE(s)->kernel_filename || qtest_enabled()) ?
+            RK3588_DIRECT_RAM_BASE : RK3588_DEFAULT_RAM_BASE;
+    }
+    return rk3588_memmap[RK3588_RAM].base;
 }
 
 enum {
@@ -3126,8 +3134,12 @@ static void rk3588_create_uarts(RK3588MachineState *s)
 
         if (s->direct_ram_layout) {
             if (u->memidx == RK3588_UART2) {
-                /* The console UART keeps the legacy chardev slot. */
-                chr_index = 1;
+                /*
+                 * Direct Linux boot has no USB CDC console in front of
+                 * the UART, so the console stays on the first serial slot.
+                 */
+                chr_index = MACHINE(s)->kernel_filename ? 0 :
+                            serial_hd(1) ? 1 : 0;
             } else if (u->memidx == RK3588_UART3) {
                 /* UART3 is the dedicated data link. */
                 chr_index = 2;
@@ -3585,7 +3597,8 @@ static void rk3588_create_usb3_device(RK3588MachineState *s)
     DeviceState *dev = qdev_new(TYPE_RK3588_DWC3_UDC);
     SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
 
-    if (s->direct_ram_layout) {
+    if (s->direct_ram_layout && !MACHINE(s)->kernel_filename &&
+        serial_hd(1)) {
         qdev_prop_set_chr(dev, "chardev", serial_hd(0));
     }
     object_property_add_child(OBJECT(s), "usb3otg0", OBJECT(dev));
