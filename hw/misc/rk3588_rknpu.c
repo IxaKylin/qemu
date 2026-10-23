@@ -4439,10 +4439,9 @@ static bool rockchip_rknn_ppu_budget_valid(
     uint64_t host_bytes;
     uint64_t work_items;
 
-    if (!ppu->out_height || ppu->dst_stride % ppu->out_height) {
+    if (!ppu->out_height) {
         return false;
     }
-    output_line_stride = ppu->dst_stride / ppu->out_height;
     if (!rockchip_rknn_u64_mul(ppu->in_width, bytes_per_pixel,
                                &input_row_bytes_u64) ||
         !rockchip_rknn_u64_mul(ppu->out_width, bytes_per_pixel,
@@ -4451,9 +4450,28 @@ static bool rockchip_rknn_ppu_budget_valid(
                                &minimum_input_surface_bytes) ||
         ppu->line_stride < input_row_bytes_u64 ||
         ppu->surf_stride < minimum_input_surface_bytes ||
-        output_line_stride < output_row_bytes_u64 ||
         input_row_bytes_u64 > SIZE_MAX || output_row_bytes_u64 > SIZE_MAX) {
         return false;
+    }
+    /*
+     * dst_stride is the byte stride between channel surfaces.  Existing
+     * streams encode the row stride as dst_stride divided by the output
+     * height.  Some generated command streams leave alignment padding
+     * between the last row and the next surface; for those use the byte
+     * width of one output row.
+     */
+    if (ppu->dst_stride % ppu->out_height == 0) {
+        output_line_stride = ppu->dst_stride / ppu->out_height;
+        if (output_line_stride < output_row_bytes_u64) {
+            return false;
+        }
+    } else {
+        output_line_stride = output_row_bytes_u64;
+        if (!rockchip_rknn_u64_mul(output_line_stride, ppu->out_height,
+                                   &host_bytes) ||
+            ppu->dst_stride < host_bytes) {
+            return false;
+        }
     }
     if (mode == ROCKCHIP_RKNN_EXECUTION_PPU_BYPASS) {
         if (!rockchip_rknn_u64_mul3(surfaces, ppu->in_height,
@@ -4504,7 +4522,9 @@ static RockchipRKNNExecutionResult rockchip_rknn_execute_ppu(
     const unsigned int surfaces =
         DIV_ROUND_UP(ppu->in_channels, bytes_per_pixel / element_bytes);
     const unsigned int output_line_stride =
-        ppu->dst_stride / ppu->out_height;
+        ppu->dst_stride % ppu->out_height == 0 ?
+            ppu->dst_stride / ppu->out_height :
+            ppu->out_width * bytes_per_pixel;
     const unsigned int top = extract32(ppu->padding, 4, 3);
     const unsigned int left = extract32(ppu->padding, 0, 3);
     const unsigned int kernel_width = extract32(
