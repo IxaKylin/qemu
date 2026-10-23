@@ -332,8 +332,6 @@ struct RK3588MachineState {
     DeviceState *pcie3x2;
     DeviceState *pcie2x1l0;
     DeviceState *pcie2x1l2;
-    DeviceState *gmac0;
-    DeviceState *gmac1;
     DeviceState *cru;
     DeviceState *rknn[3];
     DeviceState *rknn_mmu[3];
@@ -3271,41 +3269,6 @@ static void rk3588_create_gpio(RK3588MachineState *s)
     }
 }
 
-static void rk3588_create_gmac(RK3588MachineState *s)
-{
-    SysBusDevice *sbd;
-
-    /*
-     * Synopsys dwmac-4.20a (GMAC4). Boards select the RK3588 GMAC instances
-     * that their FDT advertises as "rockchip,rk3588-gmac",
-     * "snps,dwmac-4.20a". Linux stmmac reads MAC_VERSION @0x110 expecting
-     * SNPSVER 0x51 (GMAC4); TYPE_DWMAC4 returns exactly that, letting
-     * stmmac_bind complete and the interface enumerate. Replaces the older
-     * TYPE_NPCM_GMAC v3.50a model which returned the wrong synth-id and never
-     * bound.
-     */
-    if (s->board->gmac_mask & BIT(0)) {
-        s->gmac0 = qdev_new(TYPE_DWMAC4);
-        object_property_add_child(OBJECT(s), "gmac0", OBJECT(s->gmac0));
-        qemu_configure_nic_device(s->gmac0, false, "gmac0");
-        sbd = SYS_BUS_DEVICE(s->gmac0);
-        sysbus_realize(sbd, &error_fatal);
-        sysbus_mmio_map(sbd, 0, rk3588_memmap[RK3588_GMAC0].base);
-        sysbus_connect_irq(sbd, 0,
-                           qdev_get_gpio_in(s->gic, RK3588_GMAC0_SPI));
-    }
-
-    if (s->board->gmac_mask & BIT(1)) {
-        s->gmac1 = qdev_new(TYPE_DWMAC4);
-        object_property_add_child(OBJECT(s), "gmac1", OBJECT(s->gmac1));
-        qemu_configure_nic_device(s->gmac1, true, "gmac1");
-        sbd = SYS_BUS_DEVICE(s->gmac1);
-        sysbus_realize(sbd, &error_fatal);
-        sysbus_mmio_map(sbd, 0, rk3588_memmap[RK3588_GMAC1].base);
-        sysbus_connect_irq(sbd, 0,
-                           qdev_get_gpio_in(s->gic, RK3588_GMAC1_SPI));
-    }
-}
 
 enum {
     RK3588_PCIE_IRQ_ERR,
@@ -4087,6 +4050,8 @@ static void rk3588_init(MachineState *machine)
     object_initialize_child(OBJECT(s), "soc", &s->soc, TYPE_RK3588_SOC);
     qdev_prop_set_bit(DEVICE(&s->soc), "legacy-firmware", true);
     qdev_prop_set_uint32(DEVICE(&s->soc), "num-cpus", machine->smp.cpus);
+    qdev_prop_set_uint32(DEVICE(&s->soc), "gmac-mask",
+                         board->gmac_mask);
     object_property_set_link(OBJECT(&s->soc), "memory",
                              OBJECT(get_system_memory()), &error_abort);
     qdev_realize(DEVICE(&s->soc), NULL, &error_fatal);
@@ -4130,7 +4095,6 @@ static void rk3588_init(MachineState *machine)
     rk3588_create_spi2(s);
     rk3588_create_i2c6(s);
     rk3588_create_rng(s);
-    rk3588_create_gmac(s);
     rk3588_create_rknpu(s);
     rk3588_create_pcie(s);
     rk3588_create_pcie2x1(s);

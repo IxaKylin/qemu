@@ -81,9 +81,11 @@ struct RK3588SoCState {
     DeviceState *otp;
     DeviceState *sfc;
     DeviceState *sdmmc;
+    DeviceState *gmac[2];
     MemoryRegion *memory;
     bool legacy_firmware;
     uint32_t num_cpus;
+    uint32_t gmac_mask;
 };
 
 #endif /* HW_ARM_RK3588_H */

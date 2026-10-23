@@ -17,9 +17,12 @@
 #include "hw/arm/rk3588.h"
 #include "hw/arm/bsa.h"
 #include "hw/core/qdev-properties.h"
+#include "net/net.h"
 #include "hw/core/sysbus.h"
 #include "hw/cpu/cluster.h"
 #include "hw/misc/unimp.h"
+#include "hw/core/register.h"
+#include "hw/net/dwmac4.h"
 #include "hw/net/rtl8125.h"
 #include "hw/pci-host/rockchip_pcie.h"
 #include "hw/sd/dw_mmc.h"
@@ -45,6 +48,11 @@
 #define RK3588_PCIE2X1L2_PMC_SPI     252
 #define RK3588_PCIE2X1L2_SYS_SPI     253
 #define RK3588_GIC_NUM_IRQS          512
+
+#define RK3588_GMAC0_BASE            0xfe1b0000
+#define RK3588_GMAC1_BASE            0xfe1c0000
+#define RK3588_GMAC0_SPI             227
+#define RK3588_GMAC1_SPI             234
 
 /* UART0 in the PMU power domain is reserved; UART1-UART9 are modeled. */
 #define RK3588_FIRST_UART            (1)
@@ -646,6 +654,40 @@ static bool rk3588_soc_create_pcie(RK3588SoCState *s, Error **errp)
     return true;
 }
 
+static bool rk3588_soc_create_gmac(RK3588SoCState *s, Error **errp)
+{
+    static const struct {
+        hwaddr base;
+        int spi;
+        const char *name;
+        bool match_default;
+    } gmacs[] = {
+        { RK3588_GMAC0_BASE, RK3588_GMAC0_SPI, "gmac0", false },
+        { RK3588_GMAC1_BASE, RK3588_GMAC1_SPI, "gmac1", true },
+    };
+
+    for (unsigned int i = 0; i < ARRAY_SIZE(gmacs); i++) {
+        SysBusDevice *sbd;
+
+        if (!(s->gmac_mask & BIT(i))) {
+            continue;
+        }
+        s->gmac[i] = qdev_new(TYPE_DWMAC4);
+        object_property_add_child(OBJECT(s), gmacs[i].name,
+                                  OBJECT(s->gmac[i]));
+        qemu_configure_nic_device(s->gmac[i], gmacs[i].match_default,
+                                  gmacs[i].name);
+        sbd = SYS_BUS_DEVICE(s->gmac[i]);
+        if (!sysbus_realize(sbd, errp)) {
+            return false;
+        }
+        sysbus_mmio_map(sbd, 0, gmacs[i].base);
+        sysbus_connect_irq(sbd, 0,
+                           qdev_get_gpio_in(DEVICE(&s->gic), gmacs[i].spi));
+    }
+    return true;
+}
+
 static void rk3588_soc_realize(DeviceState *dev, Error **errp)
 {
     RK3588SoCState *s = RK3588_SOC(dev);
@@ -729,6 +771,9 @@ static void rk3588_soc_realize(DeviceState *dev, Error **errp)
         if (!sysbus_realize(SYS_BUS_DEVICE(s->usb3otg0), errp)) {
             return;
         }
+        if (!rk3588_soc_create_gmac(s, errp)) {
+            return;
+        }
         return;
     }
 
@@ -776,6 +821,7 @@ static const Property rk3588_soc_properties[] = {
                      false),
     DEFINE_PROP_UINT32("num-cpus", RK3588SoCState, num_cpus,
                        RK3588_NUM_CPUS),
+    DEFINE_PROP_UINT32("gmac-mask", RK3588SoCState, gmac_mask, 0),
 };
 
 static const VMStateDescription vmstate_rk3588_soc = {
