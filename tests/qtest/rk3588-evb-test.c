@@ -81,12 +81,12 @@
 #define RK3588_GICR_BASE 0xfe680000ULL
 #define RK3588_GPIO0_BASE 0xfd8a0000ULL
 #define RK3588_UART2_BASE 0xfeb50000ULL
-#define RK3588_ZVM_LOW_RAM_BASE 0x68000000ULL
-#define RK3588_ZVM_SHARED_RAM_BASE 0xe7f00000ULL
-#define RK3588_ZVM_NOTIFY_INFO_BASE 0xefd00000ULL
-#define RK3588_ZVM_NOTIFY_BASE 0xefe00000ULL
-#define RK3588_ZVM_HIGH_RAM_BASE 0x100000000ULL
-#define RK3588_ZVM_HIGH_RAM_LAST 0x1ffffffffULL
+#define RK3588_RESERVED_LOW_RAM_BASE 0x68000000ULL
+#define RK3588_RESERVED_SHARED_RAM_BASE 0xe7f00000ULL
+#define RK3588_RESERVED_NOTIFY_INFO_BASE 0xefd00000ULL
+#define RK3588_RESERVED_NOTIFY_BASE 0xefe00000ULL
+#define RK3588_RESERVED_HIGH_RAM_BASE 0x100000000ULL
+#define RK3588_RESERVED_HIGH_RAM_LAST 0x1ffffffffULL
 
 #define GICD_TYPER 0x0004
 #define GICR_TYPER 0x0008
@@ -210,10 +210,10 @@ static QTestState *rk3588_qtest_start(unsigned int cpus)
                        cpus);
 }
 
-static QTestState *rk3588_qtest_start_zvm_ram(void)
+static QTestState *rk3588_qtest_start_reserved_ram(void)
 {
     return qtest_init("-machine " RK3588_EVB_MACHINE
-                      ",zvm-ram=on -smp 1 -m 512M");
+                      ",reserved-ram=on -smp 1 -m 512M");
 }
 
 static void test_rk3588_machine_creation(void)
@@ -760,32 +760,32 @@ static void test_rk3588_smp_creation(void)
     qtest_quit(qts);
 }
 
-static void test_rk3588_zvm_ram(void)
+static void test_rk3588_reserved_ram(void)
 {
-    QTestState *qts = rk3588_qtest_start_zvm_ram();
+    QTestState *qts = rk3588_qtest_start_reserved_ram();
 
-    qtest_writel(qts, RK3588_ZVM_LOW_RAM_BASE, 0x68000000);
-    g_assert_cmphex(qtest_readl(qts, RK3588_ZVM_LOW_RAM_BASE), ==,
+    qtest_writel(qts, RK3588_RESERVED_LOW_RAM_BASE, 0x68000000);
+    g_assert_cmphex(qtest_readl(qts, RK3588_RESERVED_LOW_RAM_BASE), ==,
                     0x68000000);
 
-    qtest_writel(qts, RK3588_ZVM_SHARED_RAM_BASE + 0x408, 0xe7f00408);
-    g_assert_cmphex(qtest_readl(qts, RK3588_ZVM_SHARED_RAM_BASE + 0x408), ==,
+    qtest_writel(qts, RK3588_RESERVED_SHARED_RAM_BASE + 0x408, 0xe7f00408);
+    g_assert_cmphex(qtest_readl(qts, RK3588_RESERVED_SHARED_RAM_BASE + 0x408), ==,
                     0xe7f00408);
 
-    qtest_writel(qts, RK3588_ZVM_NOTIFY_INFO_BASE, 0xefd00000);
-    g_assert_cmphex(qtest_readl(qts, RK3588_ZVM_NOTIFY_INFO_BASE), ==,
+    qtest_writel(qts, RK3588_RESERVED_NOTIFY_INFO_BASE, 0xefd00000);
+    g_assert_cmphex(qtest_readl(qts, RK3588_RESERVED_NOTIFY_INFO_BASE), ==,
                     0xefd00000);
 
-    qtest_writel(qts, RK3588_ZVM_NOTIFY_BASE, 0xefe00000);
-    g_assert_cmphex(qtest_readl(qts, RK3588_ZVM_NOTIFY_BASE), ==,
+    qtest_writel(qts, RK3588_RESERVED_NOTIFY_BASE, 0xefe00000);
+    g_assert_cmphex(qtest_readl(qts, RK3588_RESERVED_NOTIFY_BASE), ==,
                     0xefe00000);
 
-    qtest_writeq(qts, RK3588_ZVM_HIGH_RAM_BASE, 0x100000000ULL);
-    g_assert_cmphex(qtest_readq(qts, RK3588_ZVM_HIGH_RAM_BASE), ==,
+    qtest_writeq(qts, RK3588_RESERVED_HIGH_RAM_BASE, 0x100000000ULL);
+    g_assert_cmphex(qtest_readq(qts, RK3588_RESERVED_HIGH_RAM_BASE), ==,
                     0x100000000ULL);
 
-    qtest_writeb(qts, RK3588_ZVM_HIGH_RAM_LAST, 0x5a);
-    g_assert_cmphex(qtest_readb(qts, RK3588_ZVM_HIGH_RAM_LAST), ==, 0x5a);
+    qtest_writeb(qts, RK3588_RESERVED_HIGH_RAM_LAST, 0x5a);
+    g_assert_cmphex(qtest_readb(qts, RK3588_RESERVED_HIGH_RAM_LAST), ==, 0x5a);
 
     qtest_quit(qts);
 }
@@ -824,7 +824,7 @@ int main(int argc, char **argv)
     qtest_add_func("/rk3588-evb/its-lpi", test_rk3588_its_lpi);
     qtest_add_func("/rk3588-evb/pcie", test_rk3588_pcie);
     qtest_add_func("/rk3588-evb/gpio-bank", test_rk3588_gpio_bank);
-    qtest_add_func("/rk3588-evb/zvm-ram", test_rk3588_zvm_ram);
+    qtest_add_func("/rk3588-evb/reserved-ram", test_rk3588_reserved_ram);
 
     return g_test_run();
 }

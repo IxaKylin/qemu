@@ -3826,7 +3826,7 @@ static void test_rk3588_rknpu_iommu_v2_high_address(void)
     uint64_t commands[RK3588_RKNN_MATMUL_COMMANDS];
     QTestState *qts = qtest_initf(
         "-machine " RK3588_EVB_MACHINE
-        ",rknpu=on,zvm-ram=on -smp 1 -m 512M");
+        ",rknpu=on,reserved-ram=on -smp 1 -m 512M");
 
     rk3588_rknn_prepare_matmul(qts, true, 0xa5);
     rk3588_rknn_make_matmul_regcmd(commands, true);

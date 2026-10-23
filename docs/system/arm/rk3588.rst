@@ -92,10 +92,10 @@ is taken from the Linux FIT image loaded by U-Boot, so ``-dtb`` cannot be
 used with this method.
 
 By default RAM above the 4 GiB peripheral hole is mapped at
-``0x100000000``, matching the reference U-Boot/Linux image set. ZVisor's
-fixed stage-2 guest windows require that bank at ``0x400000000``, so the
-ZVisor boot adds ``-machine rock-5b,high-ram-base=0x400000000``. The
-property may be used with either boot method.
+``0x100000000``, matching the reference U-Boot/Linux image set. Some
+downstream firmware requires that bank at ``0x400000000`` and selects it
+with ``-machine rock-5b,high-ram-base=0x400000000``. The property may be
+used with either boot method.
 
 Direct Linux boot supplies an AArch64 Linux ``Image`` with ``-kernel``
 and a device tree with ``-dtb``; ``-initrd`` and ``-append`` are optional.
@@ -107,7 +107,7 @@ Running
 Serial ports are assigned as follows:
 
 * ``-serial`` slot 0: the Type-C USB CDC console implemented by the DWC3
-  device-mode controller (the console used by ZVisor firmware).
+  device-mode controller.
 * ``-serial`` slot 1: UART2, the debug console on the board header and the
   console used by U-Boot and Linux.
 * further ``-serial`` options connect to UART1 and UART3 through UART9 in
@@ -137,15 +137,15 @@ With ``u-boot-dtb.bin`` and ``spi-nor.img``:
 The SPI NOR image must be exactly 16 MiB. Add ``snapshot=on`` to the
 drive option to discard guest writes.
 
-ZVisor boot from SD over the Type-C USB CDC console
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Firmware boot from SD over the Type-C USB CDC console
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The machine boots the unmodified ZVisor firmware built for the real board
-with a U-Boot that can read the ProcessONE SD card layout: U-Boot scans the
-modeled ``dw_mmc`` controller, loads ``boot.scr``, stages the payloads in
-DRAM and enters ZVisor with ``bootm``. ZVisor's console and shell then
-appear on the emulated Type-C USB CDC port. An RTL8125 user-mode network is
-attached with ``-nic`` for its DHCP/network stack:
+The machine boots firmware built for the real board with a U-Boot that can
+read the board SD card layout: U-Boot scans the modeled ``dw_mmc``
+controller, loads ``boot.scr``, stages the payloads in DRAM and enters the
+firmware with ``bootm``. The firmware console then appears on the emulated
+Type-C USB CDC port. An RTL8125 user-mode network is attached with ``-nic``
+for its DHCP/network stack:
 
 .. code-block:: bash
 
@@ -161,9 +161,7 @@ attached with ``-nic`` for its DHCP/network stack:
        -nic user,model=rtl8125
 
 Connect the host side with ``socat - UNIX-CONNECT:/tmp/rock5b-usb-cdc.sock``
-and wait for the ``uart:~$`` prompt. See ``scripts/rock5b-usb/`` for the
-remote-build, U-Boot, SD-media and boot helpers used to produce and run
-these images.
+and wait for the firmware prompt.
 
 Direct Linux boot
 ^^^^^^^^^^^^^^^^^
@@ -184,19 +182,16 @@ Limitations
 
 The machine is TCG-only; KVM is not supported. BootROM, DDR training,
 SPL and BL31 are not modeled; firmware boot starts U-Boot proper directly.
-The remaining RK3588 peripherals are unimplemented. ZVisor boot requires
-the ``high-ram-base=0x400000000`` option because its stage-2 guest windows
-are tied to that physical RAM bank; its virtual machines only run with the
-matching real ProcessONE guest payloads staged by U-Boot (the SD helper can
-use placeholders when the remote build host is unavailable). The SD
-controller supports one card on ``if=sd,index=2`` and the RTL8125 has no
-PHY/MAC calibration data (link state and packet path are modeled, the PHY
-data values are synthetic). The modeled DWC3 CDC console buffers transmit
-data across host connection establishment and paces console input so that
-the firmware's line-coding control bridge does not coalesce characters;
-under heavy host CPU oversubscription the guest can still log rare
-endpoint-command deadline warnings. Migration and VM snapshots are
-unsupported.
+The remaining RK3588 peripherals are unimplemented. Some downstream
+firmware requires the ``high-ram-base=0x400000000`` option because its
+fixed guest windows are tied to that physical RAM bank. The SD controller
+supports one card on ``if=sd,index=2`` and the RTL8125 has no PHY/MAC
+calibration data (link state and packet path are modeled, the PHY data
+values are synthetic). The modeled DWC3 CDC console buffers transmit data
+across host connection establishment and paces console input so that the
+firmware's line-coding control bridge does not coalesce characters; under
+heavy host CPU oversubscription the guest can still log rare endpoint-command
+deadline warnings. Migration and VM snapshots are unsupported.
 
 ROCK 5B+
 --------
@@ -218,7 +213,7 @@ Radxa ROCK 5B+ Firmware Image
 
 The ``rock-5b-plus`` firmware profile accepts either a complete raw Radxa SDK
 image or the split layout used by the real board: SPI NOR contains U-Boot and
-the SD card contains the ZVisor/guest payload files.  The split layout keeps
+the SD card contains the firmware and guest payload files.  The split layout keeps
 the firmware and payload media separate while preserving the board's boot
 order.
 
@@ -238,7 +233,7 @@ For a complete legacy image, no extraction or repackaging is required:
 
 For the split SPI/SD layout, pass a 16 MiB SPI NOR image containing the
 Rockchip SPI boot image and an SD image whose FAT partition contains the files
-loaded by the U-Boot environment (``zvisor.img``, ``zvisor.dtb``,
+loaded by the U-Boot environment (the firmware image, its device tree,
 ``zephyr-guest.bin``, ``linux-Image.flash.gz``, and
 ``initramfs.cpio.flash.gz``):
 
@@ -261,7 +256,7 @@ controller, so U-Boot sees it as ``mmc 1`` and uses ``mmc 1:1`` for FAT loads.
 The RK3588 machines default to 8 GiB.  ROCK 5B+ uses the direct-kernel
 RAM base at ``0x10000000`` by default.  RAM below the 4 GiB peripheral window
 is mapped in the low bank; the remaining RAM is mapped at 16 GiB so it does
-not overlap the fixed ZVM high-memory window at 4 GiB.
+not overlap the fixed reserved high-memory window at 4 GiB.
 
 This path runs the image's DDR/TPL and SPL code, verifies all FIT loadables,
 uses the FIT metadata to select the U-Boot load address dynamically, enters
@@ -313,7 +308,7 @@ The RK3588 machines are local downstream models for booting Linux and firmware
 images built for Rockchip RK3588 boards.  They support QEMU's direct Arm Linux
 boot path and a downstream firmware path that runs the Rockchip TPL/SPL image,
 validates the U-Boot FIT loadables, hands off to U-Boot proper, and lets
-U-Boot boot Linux or ZVM test images from modeled MMC media.
+U-Boot boot Linux or firmware test images from modeled MMC media.
 
 Two legacy board machines are available.  Each board has its own machine source
 file and build-time Kconfig entry; the common ``rk3588`` type is abstract and
@@ -329,18 +324,18 @@ contains only shared SoC construction and boot orchestration:
   using the hardware compatible ``rockchip,rk3588s-firefly-roc-pc``.
   Firmware boot reads the Rockchip RKNS image from ``if=sd,index=2`` and
   exposes it through the SDMMC/TF-card controller used by the package's
-  ``mmc dev 1`` boot script.  This machine maps the fixed ZVM guest/shared RAM
-  windows by default, corresponding to the real board's larger DRAM layout.
+  ``mmc dev 1`` boot script.  This machine maps the fixed reserved guest/shared
+  RAM windows by default, corresponding to the real board's larger DRAM layout.
 
 Supported devices
 ~~~~~~~~~~~~~~~~~
 
 The machines currently model or stub the devices needed by the downstream
-RK3588 kernel and ZVM smoke tests:
+RK3588 kernel and firmware smoke tests:
 
 * 8 Arm cores matching the RK3588 big.LITTLE layout: Cortex-A55 CPUs 0-3 and
   Cortex-A76 CPUs 4-7.  Under TCG the CPU objects expose EL2 and EL3 for the
-  firmware and ZVM paths.  The RK3588 machines do not install RK3588-only CPU
+  firmware paths.  The RK3588 machines do not install RK3588-only CPU
   compatibility properties for EL2 FP/SIMD traps or EL2 PAN handling.
 * GICv3 with two ITS blocks and LPI support.
 * All ten RK3588 UARTs (UART0-UART9) through QEMU's ``serial_mm``
@@ -567,229 +562,3 @@ U-Boot loads the kernel, initramfs, and DTB from eMMC, prints
 ``Starting kernel ...``, and the smoke initramfs reaches
 ``=== init done, exec sh ===``.
 
-ZVM on RK3588 EVB
-~~~~~~~~~~~~~~~~~
-
-The EVB ZVM smoke path uses an eMMC image and the upstream package's manual
-copy sequence with ``mmc dev 0``.  Enable the optional ZVM RAM windows for this
-machine, because the EVB board keeps them disabled by default:
-
-.. code-block:: bash
-
-   $ build/qemu-system-aarch64 \
-       -accel tcg \
-       -machine rk3588-evb,zvm-ram=on \
-       -smp 8 \
-       -m 1G \
-       -drive if=sd,index=0,file=build/agent/zvm-rk3588/scratch/zvm-rk3588-qemu-emmc.img,format=raw \
-       -serial mon:stdio \
-       -display none
-
-At the U-Boot prompt, run:
-
-.. code-block:: text
-
-   => echo loading ZVM img ...
-   => mmc dev 0
-   => fatload mmc 0:1 0x10000000 zvm_release_rk3588v2.bin
-   => cp.b 0x103fd000 0x38800000 0x2f000
-   => cp.b 0x1038b000 0x38600000 0x71958
-   => cp.b 0x10319000 0x38400000 0x712e0
-   => cp.b 0x102a7000 0x38200000 0x71178
-   => cp.b 0x1023c000 0x38000000 0x6afc8
-   => cp.b 0x1023b000 0x12afa000 0x4
-   => cp.b 0x100f7000 0x129b6000 0x143570
-   => go 0x10000000
-
-The validated no-compatibility run reaches ``zvm_host:~#`` and starts the
-bundled Zephyr guest.  This EVB image is useful for the ZVM host and basic
-guest smoke path; use the ROC image below for the full Linux VM release-image
-layout.
-
-ZVM on ROC-RK3588S-PC
-~~~~~~~~~~~~~~~~~~~~~
-
-The `RK3588 ZVM deployment guide
-<https://esnl.hnu.edu.cn/zvm/document/deploy_rk3588.html>`_ targets the
-Firefly ROC-RK3588S-PC board.  It expects an 8 GiB first FAT partition, a
-second partition larger than 21 GiB, the boot files on the first partition,
-and ``nrtos_images.bin`` written to the second partition with
-``bs=1M seek=1024``.  The packaged file-system images are then written to the
-second partition at 3 GiB-spaced offsets, leaving the first 3 GiB of that
-partition for ZVM guest run records:
-
-* ``android_vda.img`` at ``seek=3072``
-* ``oh_vda.bin`` at ``seek=6144``
-* ``linux_diskimg.bin`` at ``seek=9216``, ``12288``, ``15360``, and ``19432``
-
-Download the ZVM release binaries from the official `ZVM RK3588 download page
-<https://esnl.hnu.edu.cn/zvm/downloads/download_rk3588.html>`_.  The QEMU image
-flow uses these release packages:
-
-* ``kernel_images.zip``: provides ``kernel_images/`` with
-  ``zvm_release_rk3588v2.bin``, ``boot.scr``, ``nrtos_images.bin``, and the
-  raw images used by the package helper.
-* ``file_system_images_part1.zip`` and ``file_system_images_part2.zip``:
-  provide ``file_system_images/``.  Run its ``unpack.sh`` to produce the
-  ``file_system_images/image/`` directory containing ``android_vda.img``,
-  ``oh_vda.bin``, and ``linux_diskimg.bin``.
-
-The Rockchip RKNS firmware binary, ``u-boot-rockchip.bin``, is separate from
-the ZVM release package.  Use the RK3588 U-Boot build produced by the firmware
-flow above, or another ROC-RK3588S-PC U-Boot build that emits the same combined
-Rockchip image.
-
-The release package also ships ``nrtos_imagespack.py`` with
-``N = 0x1205000``.  For a raw QEMU TF-card image this means the second
-partition must start at sector ``0x1005000`` so that ``seek=1024`` lands
-``nrtos_images.bin`` at the absolute sector ZVM reads.  A more conventional
-8 GiB-aligned second partition start of ``0x1008000`` puts the image 6 MiB too
-late; ZVM then detects the slots but loads zero-filled Linux buffers.
-
-The Linux kernel slot inside ``nrtos_images.bin`` must match the modules in
-``linux_diskimg.bin``.  The release file system carries
-``/lib/modules/5.10.110/kernel/zshm.ko`` with ``vermagic=5.10.110 SMP
-mod_unload aarch64``.  If the first 64 MiB Linux kernel slot is replaced by an
-unmatched kernel, Linux can still reach the Buildroot login prompt but
-``zshm.ko`` fails to load and ZVM's operation-test heartbeat waits until the
-Linux VM start timeout.  The local validated image uses the release
-``Image.official`` 5.10.110 kernel in that slot.
-
-To rebuild the boot payloads from the official package, run the package helper
-from the ``kernel_images`` directory and choose option ``3``:
-
-.. code-block:: bash
-
-   $ cd build/agent/zvm-rk3588/work/kernel_images
-   $ printf '3\n' | ./auto_py.sh
-
-This regenerates ``nrtos_images.bin``, ``zvm_release_rk3588v2.bin``, and
-``boot.scr``.  The helper runs ``raw_kernel_images/nrtos_imagespack.py`` first,
-then ``raw_kernel_images/pack_img_v2.py``.  The first script packs the Linux,
-Android, and OpenHarmony kernel/initramfs/DTB slots into fixed-size regions in
-``nrtos_images.bin``.  The second script packs the ZVM segments listed in
-``raw_kernel_images/segments.map`` together with the Zephyr and FreeRTOS helper
-images into ``zvm_release_rk3588v2.bin`` and refreshes the U-Boot script.
-
-The repository also provides a QEMU raw-image helper for the ROC board.  It
-supports Linux hosts with ``dosfstools`` and ``mtools`` installed, and macOS
-hosts through ``hdiutil`` and ``newfs_msdos``:
-
-.. code-block:: bash
-
-   $ ZVM=build/agent/zvm-rk3588
-   $ KIMG=$ZVM/work/kernel_images
-   $ FSIMG=$ZVM/work/file_system_images_official/image
-   $ UBOOT=$ZVM/scratch/u-boot-roc-zvmcompat-build/u-boot-rockchip.bin
-   $ OUT=$ZVM/scratch/zvm-rk3588-qemu-roc-sd-official-fixed.img
-   $ scripts/zvm/rk3588s-roc-pc-make-zvm-image.sh \
-       --kernel-dir "$KIMG" \
-       --filesystem-dir "$FSIMG" \
-       --uboot-rockchip "$UBOOT" \
-       --output "$OUT" \
-       --force
-
-The script creates the 32 GiB raw card image, writes the MBR partition table,
-formats both FAT partitions, copies ``zvm_release_rk3588v2.bin`` and
-``boot.scr``/``boot.scr.uimg`` to the first partition, writes
-``nrtos_images.bin`` to the second partition at ``bs=1M seek=1024``, writes the
-Android/OpenHarmony/Linux file-system images at the offsets listed above, and
-installs ``u-boot-rockchip.bin`` at LBA 64.
-
-When diagnosing ``Timeout waiting for vm: linux_os-1 start`` or
-``Failed to run linux VM 1, ret=-19``, check the image contents before changing
-CPU or machine state:
-
-* The ``nrtos_images.bin`` slot must be readable at the absolute sector
-  expected by ZVM.  With the package's ``N = 0x1205000`` this means the second
-  partition starts at sector ``0x1005000`` and the file is written to that
-  partition with ``seek=1024``.
-* The Linux kernel in the first 64 MiB of ``nrtos_images.bin`` must match the
-  file-system modules.  A local test with a 7.1.0-rc7 kernel and the release
-  5.10.110 root file system reached the Linux login prompt through
-  ``zvm look 1``, but ``insmod /lib/modules/5.10.110/kernel/zshm.ko`` failed
-  with ``invalid module format`` and ZVM timed out waiting for the heartbeat.
-* The current model does not carry RK3588-specific EL2 FP/SIMD or PAN
-  compatibility properties.  A validated no-compatibility run still reached
-  ``Start VM Successful`` and ``[CREATE] linux VM 1 created and running`` for
-  ``linux_os-1``.  If the release image times out, first check for a consistent
-  ZVM Linux kernel and root file system.
-
-Use the dedicated ROC machine and attach the prepared TF-card image as
-``if=sd,index=2``.  The Rockchip RKNS firmware image in this card is read by
-the QEMU BootROM from LBA 64 and U-Boot then exposes the same card as
-``mmc 1``:
-
-.. code-block:: bash
-
-   $ build/qemu-system-aarch64 \
-       -accel tcg \
-       -machine rk3588s-roc-pc \
-       -smp 8 \
-       -m 1G \
-       -drive if=sd,index=2,file=build/agent/zvm-rk3588/scratch/zvm-rk3588-qemu-roc-sd-official-fixed.img,format=raw \
-       -nic user,model=gmac0 \
-       -nic user,model=gmac1 \
-       -serial mon:stdio \
-       -display none
-
-For repeatable local smoke tests, start from a fresh prepared TF-card image or
-refresh the Rockchip RKNS firmware area at LBA 64 before each run.  The ZVM
-package writes runtime state back to the card image; a reused scratch image can
-otherwise fail in SPL with ``spl_load_simple_fit: can't load image loadables``
-or ``mmc block read error`` before ZVM itself starts.
-
-The validated firmware path reaches U-Boot proper after TPL/SPL checks the
-ATF/U-Boot FIT loadables.  U-Boot bootflow finds ``boot.scr.uimg`` on the first
-FAT partition and executes the package's load/copy sequence automatically.  If
-autoboot is interrupted at the prompt, the same sequence can be run manually:
-
-.. code-block:: text
-
-   => echo loading ZVM img ...
-   => mmc dev 1
-   => fatload mmc 1:1 0x10000000 zvm_release_rk3588v2.bin
-   => cp.b 0x103fd000 0x38800000 0x2f000
-   => cp.b 0x1038b000 0x38600000 0x71958
-   => cp.b 0x10319000 0x38400000 0x712e0
-   => cp.b 0x102a7000 0x38200000 0x71178
-   => cp.b 0x1023c000 0x38000000 0x6afc8
-   => cp.b 0x1023b000 0x12afa000 0x4
-   => cp.b 0x100f7000 0x129b6000 0x143570
-   => go 0x10000000
-
-The local smoke run loads ``zvm_release_rk3588v2.bin``, copies the packaged
-guest images to their fixed addresses, initializes GMAC1, starts the bundled
-Zephyr guest, detects the Android/OpenHarmony/Linux file-system slots, and
-loads the Linux Image, DTB, and initramfs buffers from the corrected second
-partition offsets.  The ROC board aliases GMAC1 as ``ethernet0``; GMAC0 is
-also given a user netdev in the command above so the second modeled MAC is not
-left without a peer.  The Linux guest console is configured by the package for
-the PL011 at ``0xfeb50000`` using ``console=ttyAMA2,1500000`` and
-``earlycon=pl011,0xfeb50000``.  ZVM keeps the host shell on the QEMU serial
-terminal; after the Linux VM is running, connect the guest console from the ZVM
-shell with:
-
-.. code-block:: text
-
-   zvm_host:~# zvm look 1
-
-The validated run then shows the Linux Buildroot console on the same QEMU
-serial terminal.  With a matching 5.10.110 kernel and ``zshm.ko``, ZVM reports
-``Start VM Successful`` for ``linux_os-1``.
-
-Known limitations
-~~~~~~~~~~~~~~~~~
-
-The current model is intended for kernel and firmware bring-up smoke testing.
-It does not model the closed PMU firmware or full EL3 MMU/xlat setup; the
-RK3588 machine applies narrow runtime shims to enter BL31, keep BL31
-initialization moving, hand off to U-Boot proper, and prepare the NonSecure
-PSCI/GIC state U-Boot's Linux entry path expects.  U-Boot autoboot scans the
-modeled eMMC/SDMMC, USB2, and GMAC boot devices and either boots the extlinux
-test image or reaches the prompt when no boot image is present.  USB3 DWC3
-and attached USB storage are not modeled.
-
-Linux may print an ignored SCMI protocol-16 event registration warning, and the
-PCIe legacy INTx irq-domain path is only stubbed; PCIe MSI/MSI-X is functional
-through ITS.

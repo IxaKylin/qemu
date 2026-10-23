@@ -65,8 +65,8 @@ struct Rock5BMachineState {
     /*
      * Physical base of the RAM above 4 GiB.  The RK3588 exposes RAM through
      * a sparse physical map; the board default matches the reference boot
-     * images at 0x100000000, while ZVisor's fixed stage-2 windows need the
-     * high bank at 0x400000000.
+     * images at 0x100000000, while some downstream firmware needs the high
+     * bank at 0x400000000.
      */
     uint64_t high_ram_base;
     struct arm_boot_info binfo;
@@ -351,9 +351,9 @@ static void rock5b_class_init(ObjectClass *oc, const void *data)
     MachineClass *mc = MACHINE_CLASS(oc);
 
     /*
-     * The board reference firmware uses 0x100000000; ZVisor stage-2 windows
-     * require the high bank at 0x400000000, so the ZVisor boot script selects
-     * it with -machine rock-5b,high-ram-base=0x400000000.
+     * The board reference firmware uses 0x100000000; some downstream
+     * firmware requires the high bank at 0x400000000 and selects it with
+     * -machine rock-5b,high-ram-base=0x400000000.
      */
     object_class_property_add(oc, "high-ram-base", "uint64",
                               rock5b_get_high_ram_base,

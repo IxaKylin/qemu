@@ -540,8 +540,7 @@ static void test_sdmmc_idmac(void)
  * The CRU clock/reset banks use the Rockchip high-word write mask: the upper
  * 16 bits of the written value select the bits that are modified.  Real
  * firmware writes 0x30003000 to the reset-status bank at 0x30a04 and expects
- * 0x3000 when reading it back; ZVisor additionally refuses static VM
- * admission when that read-back does not match.
+ * 0x3000 when reading it back.
  */
 static void test_cru_reset_bank(void)
 {

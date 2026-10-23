@@ -112,7 +112,7 @@
 /*
  * Pacing of the emulated host requests, in virtual-clock nanoseconds.
  * 1 ms between enumeration requests; console characters are spaced further
- * apart: the ZVisor control-shell bridge samples the CDC line coding every
+ * apart: the control-shell bridge samples the CDC line coding every
  * 2 ms and decodes one byte per baud-rate change, so a byte can be lost if
  * two line-coding updates land inside one delayed poll.  25 ms is still much
  * faster than a human types and is validated under RTL8125 + VM load.

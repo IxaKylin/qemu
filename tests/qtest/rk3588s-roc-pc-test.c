@@ -12,8 +12,8 @@
 #define RK3588_RAM_BASE 0x00200000ULL
 #define RK3588_SDMMC_BASE 0xfe2c0000ULL
 #define RK3588_GMAC1_BASE 0xfe1c0000ULL
-#define RK3588_ZVM_SHARED_RAM_BASE 0xe7f00000ULL
-#define RK3588_ZVM_HIGH_RAM_BASE 0x100000000ULL
+#define RK3588_RESERVED_SHARED_RAM_BASE 0xe7f00000ULL
+#define RK3588_RESERVED_HIGH_RAM_BASE 0x100000000ULL
 
 #define DW_MMC_VERID 0x006c
 #define DW_MMC_VERID_270A 0x0000270a
@@ -40,14 +40,14 @@ static void test_rk3588s_roc_pc_machine_creation(void)
                     ==, DWMAC4_SNPSVER_0x51);
 
     /*
-     * ROC-RK3588S-PC is the ZVM target board. Its machine default maps the
-     * fixed ZVM guest/shared RAM windows that are real RAM on the 8 GiB board.
+     * ROC-RK3588S-PC is the reserved target board. Its machine default maps the
+     * fixed reserved guest/shared RAM windows that are real RAM on the 8 GiB board.
      */
-    qtest_writel(qts, RK3588_ZVM_SHARED_RAM_BASE + 0x408, 0xe7f00408);
-    g_assert_cmphex(qtest_readl(qts, RK3588_ZVM_SHARED_RAM_BASE + 0x408), ==,
+    qtest_writel(qts, RK3588_RESERVED_SHARED_RAM_BASE + 0x408, 0xe7f00408);
+    g_assert_cmphex(qtest_readl(qts, RK3588_RESERVED_SHARED_RAM_BASE + 0x408), ==,
                     0xe7f00408);
-    qtest_writeq(qts, RK3588_ZVM_HIGH_RAM_BASE, 0x100000000ULL);
-    g_assert_cmphex(qtest_readq(qts, RK3588_ZVM_HIGH_RAM_BASE), ==,
+    qtest_writeq(qts, RK3588_RESERVED_HIGH_RAM_BASE, 0x100000000ULL);
+    g_assert_cmphex(qtest_readq(qts, RK3588_RESERVED_HIGH_RAM_BASE), ==,
                     0x100000000ULL);
 
     qtest_quit(qts);

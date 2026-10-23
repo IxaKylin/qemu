@@ -32,7 +32,8 @@ struct RockchipCRUState {
     /*
      * Every other CRU register, including the clock gates, soft resets and
      * the vendor reset-status banks, is a plain storage register with the
-     * Rockchip high-word write mask.  U-Boot and ZVisor program these banks
+     * Rockchip high-word write mask.  U-Boot and downstream firmware program
+     * these banks
      * and read them back (for example reset 0x30a04 must read 0x3000 after
      * a 0x30003000 write), so ignoring the writes leaves real firmware in an
      * inconsistent state.

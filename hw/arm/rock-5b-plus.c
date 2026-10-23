@@ -70,7 +70,7 @@ typedef struct RK3588BoardConfig {
     bool pcie3x2_link_down;
     unsigned int pcie2x1_mask; /* BIT(0) = pcie2x1l0, BIT(2) = pcie2x1l2 */
     bool swap_gmac_aliases;
-    bool default_zvm_ram;
+    bool default_reserved_ram;
     bool default_direct_ram_layout;
     uint64_t default_ram_size;
     RK3588RknpuFdtTopology rknpu_fdt_topology;
@@ -145,7 +145,7 @@ static inline RK3588MachineState *rock5b_plus_machine(const void *obj)
 /*
  * The low RAM window ends where the first PCIe config window starts
  * (0xf0000000); RAM above it lives in the high window at 16 GiB, leaving the
- * fixed ZVM high-memory window at 4 GiB available on boards that use it.
+ * fixed reserved high-memory window at 4 GiB available on boards that use it.
  */
 #define RK3588_LOW_RAM_END 0xf0000000ULL
 #define RK3588_HIGH_RAM_BASE 0x400000000ULL
@@ -154,10 +154,10 @@ static inline RK3588MachineState *rock5b_plus_machine(const void *obj)
 #define RK3588_SRAM_SIZE MiB
 #define RK3588_IRAM_SIZE 0x00ff0000
 #define RK3588_ATAGS_SIZE (8 * KiB)
-#define RK3588_ZVM_LOW_RAM_BASE 0x68000000ULL
-#define RK3588_ZVM_LOW_RAM_LIMIT 0xf0000000ULL
-#define RK3588_ZVM_HIGH_RAM_BASE 0x100000000ULL
-#define RK3588_ZVM_HIGH_RAM_SIZE 0x100000000ULL
+#define RK3588_RESERVED_LOW_RAM_BASE 0x68000000ULL
+#define RK3588_RESERVED_LOW_RAM_LIMIT 0xf0000000ULL
+#define RK3588_RESERVED_HIGH_RAM_BASE 0x100000000ULL
+#define RK3588_RESERVED_HIGH_RAM_SIZE 0x100000000ULL
 #define RK3588_BROM_TRAMPOLINE 0xffff0000ULL
 #define RK3588_TPL_LOAD_ADDR 0xff001000ULL
 #define RK3588_BROM_SMC_NEXT_STAGE 0xc2003588
@@ -351,8 +351,8 @@ struct RK3588MachineState {
     MemoryRegion ram_low;
     MemoryRegion ram_high;
     MemoryRegion ramoops;
-    MemoryRegion zvm_low_ram;
-    MemoryRegion zvm_high_ram;
+    MemoryRegion reserved_low_ram;
+    MemoryRegion reserved_high_ram;
     MemoryRegion bootrom;
     MemoryRegion firmware_scratch;
     QEMUTimer *firmware_patch_timer;
@@ -360,7 +360,7 @@ struct RK3588MachineState {
     bool firmware_patch_done;
     bool firmware_handoff_done;
     bool firmware_atf_entered;
-    bool zvm_ram;
+    bool reserved_ram;
     bool rknpu;
     bool direct_ram_layout;
     bool pcie_links_up;
@@ -2439,41 +2439,42 @@ static void rk3588_create_atf_ddr(RK3588MachineState *s)
     object_unref(OBJECT(dev));
 }
 
-static void rk3588_create_zvm_ram(RK3588MachineState *s)
+static void rk3588_create_reserved_ram(RK3588MachineState *s)
 {
     MachineState *ms = MACHINE(s);
     MemoryRegion *sysmem = get_system_memory();
     hwaddr main_ram_limit = rk3588_ram_base(s) + ms->ram_size;
     hwaddr low_base;
 
-    if (!s->zvm_ram) {
+    if (!s->reserved_ram) {
         return;
     }
 
     /*
-     * The downstream RK3588 ZVM binary has fixed guest/shared-memory pools:
+     * Some downstream firmware uses fixed guest/shared-memory pools:
      *
      *   0x68000000..0xe7efffff: guest RAM allocator
-     *   0xe7f00000..0xefffffff: zshm/notify slots
+     *   0xe7f00000..0xefffffff: shared memory and notify slots
      *   0x100000000..0x1ffffffff: high guest RAM allocator
      *
      * These are intentionally not described to a normal Linux FDT.  Map only
      * the low-window portion not already covered by -m RAM, keeping ordinary
-     * board RAM sizing intact while still giving ZVM's fixed pools real RAM.
+     * board RAM sizing intact while still giving the firmware's fixed pools
+     * real RAM.
      */
-    low_base = MAX(main_ram_limit, RK3588_ZVM_LOW_RAM_BASE);
-    if (low_base < RK3588_ZVM_LOW_RAM_LIMIT) {
-        memory_region_init_ram(&s->zvm_low_ram, NULL,
-                               "rk3588.zvm-low-ram",
-                               RK3588_ZVM_LOW_RAM_LIMIT - low_base,
+    low_base = MAX(main_ram_limit, RK3588_RESERVED_LOW_RAM_BASE);
+    if (low_base < RK3588_RESERVED_LOW_RAM_LIMIT) {
+        memory_region_init_ram(&s->reserved_low_ram, NULL,
+                               "rk3588.reserved-low-ram",
+                               RK3588_RESERVED_LOW_RAM_LIMIT - low_base,
                                &error_fatal);
-        memory_region_add_subregion(sysmem, low_base, &s->zvm_low_ram);
+        memory_region_add_subregion(sysmem, low_base, &s->reserved_low_ram);
     }
 
-    memory_region_init_ram(&s->zvm_high_ram, NULL, "rk3588.zvm-high-ram",
-                           RK3588_ZVM_HIGH_RAM_SIZE, &error_fatal);
-    memory_region_add_subregion(sysmem, RK3588_ZVM_HIGH_RAM_BASE,
-                                &s->zvm_high_ram);
+    memory_region_init_ram(&s->reserved_high_ram, NULL, "rk3588.reserved-high-ram",
+                           RK3588_RESERVED_HIGH_RAM_SIZE, &error_fatal);
+    memory_region_add_subregion(sysmem, RK3588_RESERVED_HIGH_RAM_BASE,
+                                &s->reserved_high_ram);
 }
 
 static void rk3588_create_firmware_mmio(RK3588MachineState *s)
@@ -4073,7 +4074,7 @@ static void rk3588_init(MachineState *machine)
         memory_region_add_subregion(sysmem, RK3588_HIGH_RAM_BASE,
                                     &s->ram_high);
     }
-    rk3588_create_zvm_ram(s);
+    rk3588_create_reserved_ram(s);
 
     rk3588_create_its(s);
     rk3588_create_syscon_devices(s);
@@ -4202,18 +4203,18 @@ static void rk3588_set_firmware_bootargs(Object *obj, const char *value,
     s->firmware_bootargs = g_strdup(value);
 }
 
-static bool rk3588_get_zvm_ram(Object *obj, Error **errp)
+static bool rk3588_get_reserved_ram(Object *obj, Error **errp)
 {
     RK3588MachineState *s = rock5b_plus_machine(obj);
 
-    return s->zvm_ram;
+    return s->reserved_ram;
 }
 
-static void rk3588_set_zvm_ram(Object *obj, bool value, Error **errp)
+static void rk3588_set_reserved_ram(Object *obj, bool value, Error **errp)
 {
     RK3588MachineState *s = rock5b_plus_machine(obj);
 
-    s->zvm_ram = value;
+    s->reserved_ram = value;
 }
 
 static bool rk3588_get_rknpu(Object *obj, Error **errp)
@@ -4246,7 +4247,7 @@ static void rock_5b_plus_machine_instance_configure(Object *obj,
            board->pcie3x2_num_lanes == 2);
     assert(!(board->pcie2x1_mask & ~(BIT(0) | BIT(2))));
     s->board = board;
-    s->zvm_ram = board->default_zvm_ram;
+    s->reserved_ram = board->default_reserved_ram;
     s->direct_ram_layout = board->default_direct_ram_layout;
     s->rknpu = false;
 }
@@ -4267,10 +4268,10 @@ static void rock_5b_plus_machine_class_configure(ObjectClass *oc,
     mc->possible_cpu_arch_ids = rk3588_possible_cpu_arch_ids;
     mc->cpu_index_to_instance_props = rk3588_cpu_index_to_props;
 
-    object_class_property_add_bool(oc, "zvm-ram", rk3588_get_zvm_ram,
-                                   rk3588_set_zvm_ram);
-    object_class_property_set_description(oc, "zvm-ram",
-                                          "Map RK3588 ZVM fixed guest and "
+    object_class_property_add_bool(oc, "reserved-ram", rk3588_get_reserved_ram,
+                                   rk3588_set_reserved_ram);
+    object_class_property_set_description(oc, "reserved-ram",
+                                          "Map the fixed reserved guest and "
                                           "shared RAM windows");
     object_class_property_add_bool(oc, "rknpu", rk3588_get_rknpu,
                                    rk3588_set_rknpu);
@@ -4328,7 +4329,7 @@ static const RK3588BoardConfig rock_5b_plus_board = {
     .pcie3x2_link_down = false,
     .pcie2x1_mask = BIT(0) | BIT(2),
     .swap_gmac_aliases = false,
-    .default_zvm_ram = false,
+    .default_reserved_ram = false,
     .default_direct_ram_layout = true,
     .rknpu_fdt_topology = RK3588_RKNPU_FDT_AGGREGATE,
     .firmware_profile = &rock_5b_plus_firmware,
