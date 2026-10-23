@@ -60,6 +60,10 @@ jobs:
 
               git fetch --no-tags origin "$BASE_REF"
               base="$(git merge-base "origin/$BASE_REF" "$PR_HEAD_SHA")"
+              if [ "$base" = "$PR_HEAD_SHA" ]; then
+                  echo "range=" >> "$GITHUB_OUTPUT"
+                  exit 0
+              fi
               echo "range=$base..$PR_HEAD_SHA" >> "$GITHUB_OUTPUT"
               exit 0
           fi
@@ -91,8 +95,13 @@ jobs:
           else
               base="$(git merge-base "$PUSH_BEFORE_SHA" "$CURRENT_SHA")"
           fi
+          if [ "$base" = "$CURRENT_SHA" ]; then
+              echo "range=" >> "$GITHUB_OUTPUT"
+              exit 0
+          fi
           echo "range=$base..$CURRENT_SHA" >> "$GITHUB_OUTPUT"
-      - run: >
+      - if: steps.patch-range.outputs.range != ''
+        run: >
           ./scripts/checkpatch.pl --no-strict
           "${{ steps.patch-range.outputs.range }}"
 
