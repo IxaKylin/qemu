@@ -3623,8 +3623,7 @@ static bool rockchip_rknn_dpu_rdma_fp16_reshape_is_supported(
         dpu->output.atom != 8 ||
         rdma->feature_mode != 0x17849 ||
         rdma->erdma_cfg != ROCKCHIP_RKNN_DPU_ERDMA_DISABLE ||
-        !rdma->src_dma_cfg ||
-        (!dpu->output_notch_0 && !dpu->output_notch_1) ||
+        dpu->ew_cfg != 0x383 || dpu->lut_cfg || dpu->lut_info ||
         !dpu->output.width || !dpu->output.height ||
         !dpu->output_channels_valid ||
         dpu->output_channels_valid > dpu->output.channels ||
