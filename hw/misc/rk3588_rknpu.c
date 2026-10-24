@@ -367,6 +367,7 @@ typedef struct RockchipRKNNTensorView {
     uint32_t line_stride;
     uint32_t surface_stride;
     uint32_t surface_add;
+    bool use_surface_add;
     uint8_t precision;
     uint8_t atom;
 } RockchipRKNNTensorView;
@@ -1407,6 +1408,9 @@ static bool rockchip_rknn_decode_pipeline(RockchipRKNNCoreState *s,
     task->dpu.out_cvt_type = extract32(dpu_cvt_shift, 31, 1);
     task->dpu.surface_add = dpu_surface_add;
     task->dpu.output.surface_add = dpu_surface_add;
+    task->dpu.output.use_surface_add =
+        dpu_notch && task->dpu.output_precision == 5 &&
+        task->dpu.output.atom == 4;
     task->dpu.lut_cfg = lut_cfg;
     task->dpu.lut_info = lut_info;
     task->dpu.lut_le_start = lut_le_start;
@@ -1843,6 +1847,12 @@ static bool rockchip_rknn_depthwise_int32_flat_wdma_is_supported(
 
 static bool rockchip_rknn_strided_output_layout_valid(
     const RockchipRKNNTensorView *view, size_t element_bytes);
+
+static bool rockchip_rknn_dpu_rdma_fp16_reshape_is_supported(
+    const RockchipRKNNPipelineTask *task);
+
+static bool rockchip_rknn_fp16_notched_matmul_is_supported(
+    const RockchipRKNNPipelineTask *task);
 
 static bool rockchip_rknn_dpu_rdma_tensor_layout_is_supported(
     const RockchipRKNNPipelineTask *task, size_t element_bytes)
@@ -3022,21 +3032,7 @@ static RockchipRKNNExecutionMode rockchip_rknn_execution_mode(
         return fp16 ? ROCKCHIP_RKNN_EXECUTION_PPU_FP16_MAX_POOL :
                       ROCKCHIP_RKNN_EXECUTION_PPU_INT8_MAX_POOL;
     }
-    if (task->enabled_blocks == (ROCKCHIP_RKNN_BLOCK_DPU |
-                                 ROCKCHIP_RKNN_BLOCK_DPU_RDMA) &&
-        task->dpu.output_precision == 2 &&
-        task->dpu.data_format == 0x48000002 &&
-        task->dpu.feature_mode == 0x1e5 &&
-        task->dpu.dst_dma_cfg == 2 &&
-        task->dpu.output.width == 64 &&
-        task->dpu.output.height == 2 &&
-        task->dpu.output.atom == 8 &&
-        task->dpu.output_channels_valid == task->dpu_rdma.channels &&
-        task->dpu_rdma.width == 4 &&
-        task->dpu_rdma.height == 32 &&
-        (task->dpu_rdma.channels == 16 ||
-         task->dpu_rdma.channels == 32) &&
-        task->dpu_rdma.feature_mode == 0x17849) {
+    if (rockchip_rknn_dpu_rdma_fp16_reshape_is_supported(task)) {
         *reason = "dpu-rdma-fp16-reshape";
         return ROCKCHIP_RKNN_EXECUTION_DPU_RDMA_FP16_RESHAPE;
     }
@@ -3100,22 +3096,7 @@ static RockchipRKNNExecutionMode rockchip_rknn_execution_mode(
         *reason = "dpu-feature-mode";
         return ROCKCHIP_RKNN_EXECUTION_UNSUPPORTED;
     }
-    if (task->enabled_blocks == dpu_blocks &&
-        task->dpu.output_precision == 5 &&
-        task->dpu.data_format == 0xa8000002 &&
-        task->dpu.output.width == 1 &&
-        (task->dpu.output.height == 64 ||
-         task->dpu.output.height == 224) &&
-        task->dpu.output.channels == 32 &&
-        task->dpu.output_channels_valid == 32 &&
-        task->dpu.output.surface_stride == 1 &&
-        task->dpu.surface_add == 64 &&
-        task->dpu.output_notch_0 == 7 &&
-        task->dpu.output_notch_1 == 7 &&
-        task->cna.input.width == 1 &&
-        task->cna.input.height == task->dpu.output.height &&
-        (task->cna.input.channels == 64 ||
-         task->cna.input.channels == 128)) {
+    if (rockchip_rknn_fp16_notched_matmul_is_supported(task)) {
         *reason = "fp16-notched-matmul";
         return ROCKCHIP_RKNN_EXECUTION_DPU_FP16_NOTCHED_MATMUL;
     }
@@ -3611,17 +3592,108 @@ static uint64_t rockchip_rknn_strided_output_surface_bytes(
         return 0;
     }
 
+    if (!view->surface_stride) {
+        return 0;
+    }
     if (!rockchip_rknn_u64_mul(view->surface_stride, 16, &surface_bytes) ||
         surface_bytes < compact_surface_bytes) {
-        if (view->surface_stride != 1 || view->surface_add != 64 ||
-            view->precision != 5 || view->atom != 4 ||
-            view->width != 1 || view->channels != 32 ||
+        if (!view->use_surface_add || !view->surface_add ||
             !rockchip_rknn_u64_mul(view->surface_add, 16, &surface_bytes) ||
             surface_bytes < compact_surface_bytes) {
             return 0;
         }
     }
     return surface_bytes;
+}
+
+static bool rockchip_rknn_dpu_rdma_fp16_reshape_is_supported(
+    const RockchipRKNNPipelineTask *task)
+{
+    const RockchipRKNNDPUConfig *dpu = &task->dpu;
+    const RockchipRKNNDpuRdmaConfig *rdma = &task->dpu_rdma;
+    uint64_t source_values;
+    uint64_t output_values;
+
+    if (task->enabled_blocks != (ROCKCHIP_RKNN_BLOCK_DPU |
+                                 ROCKCHIP_RKNN_BLOCK_DPU_RDMA) ||
+        dpu->output_precision != 2 ||
+        dpu->data_format != 0x48000002 ||
+        dpu->feature_mode != 0x1e5 ||
+        dpu->dst_dma_cfg != 2 ||
+        dpu->output.atom != 8 ||
+        rdma->feature_mode != 0x17849 ||
+        rdma->erdma_cfg != ROCKCHIP_RKNN_DPU_ERDMA_DISABLE ||
+        !rdma->src_dma_cfg ||
+        (!dpu->output_notch_0 && !dpu->output_notch_1) ||
+        !dpu->output.width || !dpu->output.height ||
+        !dpu->output_channels_valid ||
+        dpu->output_channels_valid > dpu->output.channels ||
+        !rdma->width || !rdma->height || !rdma->channels) {
+        return false;
+    }
+    if (!rockchip_rknn_u64_mul3(rdma->width, rdma->height,
+                                rdma->channels, &source_values) ||
+        !rockchip_rknn_u64_mul3(dpu->output.width, dpu->output.height,
+                                dpu->output_channels_valid,
+                                &output_values) ||
+        source_values != output_values ||
+        !rockchip_rknn_u64_mul(source_values, sizeof(uint16_t),
+                               &source_values) ||
+        source_values > SIZE_MAX ||
+        !rockchip_rknn_iova_length_valid(rdma->src_iova,
+                                         source_values) ||
+        !rockchip_rknn_iova_length_valid(dpu->output.iova,
+                                         source_values)) {
+        return false;
+    }
+    return true;
+}
+
+static bool rockchip_rknn_fp16_notched_matmul_is_supported(
+    const RockchipRKNNPipelineTask *task)
+{
+    const RockchipRKNNDPUConfig *dpu = &task->dpu;
+    uint64_t compact_surface_bytes;
+    uint64_t surface_bytes;
+    uint64_t row_bytes;
+
+    if (task->enabled_blocks != (ROCKCHIP_RKNN_BLOCK_CNA |
+                                 ROCKCHIP_RKNN_BLOCK_CORE |
+                                 ROCKCHIP_RKNN_BLOCK_DPU) ||
+        task->core.depthwise ||
+        dpu->output_precision != 5 ||
+        dpu->input_precision != 2 ||
+        dpu->process_precision != 2 ||
+        task->cna.input_precision != 2 ||
+        task->cna.process_precision != 2 ||
+        task->core.process_precision != 2 ||
+        dpu->output.atom != 4 ||
+        (!dpu->output_notch_0 && !dpu->output_notch_1) ||
+        dpu->out_cvt_offset || dpu->out_cvt_scale != 1 ||
+        dpu->out_cvt_shift || dpu->out_fp32_to_fp16 ||
+        !dpu->output.width || !dpu->output.height ||
+        !dpu->output.channels || !dpu->output_channels_valid ||
+        dpu->output_channels_valid > dpu->output.channels ||
+        !dpu->surface_add || !dpu->output.surface_stride ||
+        !task->cna.input.width || !task->cna.input.height ||
+        !task->cna.input.channels ||
+        !rockchip_rknn_dpu_feature_mode_is_supported(
+            dpu->feature_mode, 0, false) ||
+        !rockchip_rknn_u64_mul3(dpu->output.width, dpu->output.height,
+                                dpu->output.atom,
+                                &compact_surface_bytes) ||
+        !rockchip_rknn_u64_mul(compact_surface_bytes, sizeof(uint32_t),
+                               &compact_surface_bytes) ||
+        !rockchip_rknn_u64_mul(dpu->surface_add, 16, &surface_bytes) ||
+        surface_bytes < compact_surface_bytes ||
+        !rockchip_rknn_u64_mul(dpu->output.surface_stride, 16,
+                               &row_bytes) ||
+        row_bytes >= compact_surface_bytes ||
+        !rockchip_rknn_iova_length_valid(dpu->output.iova,
+                                         compact_surface_bytes)) {
+        return false;
+    }
+    return true;
 }
 
 static bool rockchip_rknn_strided_output_layout_valid(
