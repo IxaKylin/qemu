@@ -3632,9 +3632,10 @@ static bool rockchip_rknn_dpu_rdma_fp16_reshape_is_supported(
         dpu->ew_cfg != 0x383 || dpu->lut_cfg || dpu->lut_info ||
         !dpu->output.width || !dpu->output.height ||
         !dpu->output_channels_valid ||
-        dpu->output_channels_valid > dpu->output.channels ||
+        dpu->output_channels_valid != dpu->output.channels ||
         !rdma->width || !rdma->height || !rdma->channels ||
-        rdma->channels % 8) {
+        rdma->channels % 8 || rdma->channels != dpu->output.channels ||
+        rdma->pad_cfg) {
         return false;
     }
     if (!rockchip_rknn_u64_mul3(rdma->width, rdma->height,
