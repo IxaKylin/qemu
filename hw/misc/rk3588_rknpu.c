@@ -1856,7 +1856,8 @@ static bool rockchip_rknn_fp16_rdma_source_layout_valid(
     size_t storage_channels, size_t *compact_bytes);
 
 static bool rockchip_rknn_fp16_notched_matmul_is_supported(
-    const RockchipRKNNPipelineTask *task);
+    const RockchipRKNNPipelineTask *task,
+    const RockchipRKNNDPUStageSnapshot *stage);
 
 static bool rockchip_rknn_dpu_rdma_tensor_layout_is_supported(
     const RockchipRKNNPipelineTask *task, size_t element_bytes)
@@ -3100,7 +3101,7 @@ static RockchipRKNNExecutionMode rockchip_rknn_execution_mode(
         *reason = "dpu-feature-mode";
         return ROCKCHIP_RKNN_EXECUTION_UNSUPPORTED;
     }
-    if (rockchip_rknn_fp16_notched_matmul_is_supported(task)) {
+    if (rockchip_rknn_fp16_notched_matmul_is_supported(task, stage)) {
         *reason = "fp16-notched-matmul";
         return ROCKCHIP_RKNN_EXECUTION_DPU_FP16_NOTCHED_MATMUL;
     }
@@ -3661,7 +3662,8 @@ static bool rockchip_rknn_dpu_rdma_fp16_reshape_is_supported(
 }
 
 static bool rockchip_rknn_fp16_notched_matmul_is_supported(
-    const RockchipRKNNPipelineTask *task)
+    const RockchipRKNNPipelineTask *task,
+    const RockchipRKNNDPUStageSnapshot *stage)
 {
     const RockchipRKNNDPUConfig *dpu = &task->dpu;
     uint64_t compact_surface_bytes;
@@ -3698,6 +3700,10 @@ static bool rockchip_rknn_fp16_notched_matmul_is_supported(
         task->core.width != dpu->output.width ||
         task->core.height != dpu->output.height ||
         task->core.channels != dpu->output.channels ||
+        !rockchip_rknn_dpu_fp16_stage_is_supported(
+            dpu->bs_cfg, stage->bs_mul_cfg, false) ||
+        !rockchip_rknn_dpu_fp16_stage_is_supported(
+            dpu->bn_cfg, stage->bn_mul_cfg, false) ||
         !rockchip_rknn_dpu_feature_mode_is_supported(
             dpu->feature_mode, 0, false) ||
         !rockchip_rknn_u64_mul3(dpu->output.width, dpu->output.height,
