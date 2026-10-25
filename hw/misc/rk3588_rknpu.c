@@ -3693,7 +3693,7 @@ static bool rockchip_rknn_fp16_notched_matmul_is_supported(
         !task->cna.input.width || !task->cna.input.height ||
         !task->cna.input.channels || !task->cna.kernel_width ||
         !task->cna.kernel_height || !task->cna.stride_x ||
-        !task->cna.stride_y ||
+        !task->cna.stride_y || task->cna.pad_value ||
         !rockchip_rknn_pipeline_shape_is_well_formed(task) ||
         !rockchip_rknn_cna_storage_layout_is_supported(&task->cna) ||
         task->cna.output_width != task->core.width ||
