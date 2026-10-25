@@ -3684,8 +3684,7 @@ static bool rockchip_rknn_fp16_notched_matmul_is_supported(
         (!dpu->output_notch_0 && !dpu->output_notch_1) ||
         dpu->out_cvt_offset || dpu->out_cvt_scale != 1 ||
         dpu->out_cvt_shift || dpu->out_fp32_to_fp16 ||
-        !(dpu->ew_cfg & (ROCKCHIP_RKNN_DPU_EW_BYPASS |
-                         ROCKCHIP_RKNN_DPU_EW_LUT_BYPASS)) ||
+        !(dpu->ew_cfg & ROCKCHIP_RKNN_DPU_EW_BYPASS) ||
         !dpu->output.width || !dpu->output.height ||
         !dpu->output.channels || !dpu->output_channels_valid ||
         dpu->output_channels_valid > dpu->output.channels ||
