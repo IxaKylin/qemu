@@ -10385,7 +10385,7 @@ static void test_rk3588_rknpu_matmul_int32_quantized_output(void)
 static void test_rk3588_rknpu_dpu_rdma_fp16_reshape(void)
 {
     uint64_t commands[RK3588_RKNN_DPU_RDMA_FP16_COMMANDS];
-    uint8_t source[4 * 32 * 8 * sizeof(uint16_t)];
+    uint8_t source[31 * 80 + 4 * 8 * sizeof(uint16_t)];
     uint8_t expected[64 * 2 * 8 * sizeof(uint16_t)];
     uint8_t output[sizeof(expected)];
     QTestState *qts = rk3588_qtest_start_rknpu();
@@ -10426,12 +10426,15 @@ static void test_rk3588_rknpu_dpu_rdma_fp16_reshape(void)
                              RKNN_REGCMD_TARGET_DPU_RDMA, 0x5044, 0x17849);
     rk3588_rknn_patch_regcmd(commands, ARRAY_SIZE(commands),
                              RKNN_REGCMD_TARGET_DPU_RDMA, 0x5048,
-                             0x200000);
-    for (unsigned int index = 0; index < ARRAY_SIZE(source); index++) {
-        source[index] = index & 0xff;
-    }
+                             1U << 19);
+    memset(source, 0, sizeof(source));
     memset(expected, 0, sizeof(expected));
-    memcpy(expected, source, sizeof(source));
+    for (unsigned int row = 0; row < 32; row++) {
+        for (unsigned int index = 0; index < 64; index++) {
+            source[row * 80 + index] = (row * 64 + index) & 0xff;
+            expected[row * 64 + index] = source[row * 80 + index];
+        }
+    }
     memset(output, 0xa5, sizeof(output));
 
     rk3588_rknn_prepare_matmul(qts, true, 0xa5);
